@@ -783,7 +783,8 @@ void receivedCallback(char *topic, byte *payload, unsigned int length)
   }
   else
   {
-    if (PROTOCOL == 2)
+    // Handling kelon protocol for hisene ac; This protocol was not properly implemented in IRremoteESP8266.h//
+    if (PROTOCOL == 103 || PROTOCOL == 112)
     {
       decode_results results;
       const uint16_t kKelonHdrMark = 9000;
@@ -1000,63 +1001,64 @@ void receivedCallback(char *topic, byte *payload, unsigned int length)
   }
   if (method == "protocol")
   {
-    const char *protocol = doc["protocol"];
-    if (strcmp(protocol, "LG2") == 0)
-    {
-      PROTOCOL = 1;
-    }
-    else if (strcmp(protocol, "KELON") == 0)
-    {
-      PROTOCOL = 2;
-    }
-    else if (strcmp(protocol, "COOLIX") == 0)
-    {
-      PROTOCOL = 3;
-    }
-    else if (strcmp(protocol, "SONY") == 0)
-    {
-      PROTOCOL = 4;
-    }
-    else if (strcmp(protocol, "DAIKIN") == 0)
-    {
-      PROTOCOL = 5;
-    }
-    else if (strcmp(protocol, "HAIER_AC") == 0)
-    {
-      PROTOCOL = 6;
-    }
-    else if (strcmp(protocol, "WHIRLPOOL_AC") == 0)
-    {
-      PROTOCOL = 7;
-    }
-    else if (strcmp(protocol, "TEKNOPOINT") == 0)
-    {
-      PROTOCOL = 8;
-    }
-    else if (strcmp(protocol, "GREE") == 0)
-    {
-      PROTOCOL = 9;
-    }
-    else if (strcmp(protocol, "TCL112AC") == 0)
-    {
-      PROTOCOL = 10;
-    }
-    else if (strcmp(protocol, "TCL96AC") == 0)
-    {
-      PROTOCOL = 11;
-    }
-    else if (strcmp(protocol, "SAMSUNG") == 0)
-    {
-      PROTOCOL = 12;
-    }
-    else if (strcmp(protocol, "PRONTO") == 0)
-    {
-      PROTOCOL = 13;
-    }
-    else if (strcmp(protocol, "PIONEER") == 0)
-    {
-      PROTOCOL = 14;
-    }
+    PROTOCOL = doc["protocol"];
+    //const char *protocol = doc["protocol"];
+    // if (strcmp(protocol, "LG2") == 0)
+    // {
+    //   PROTOCOL = 1;
+    // }
+    // else if (strcmp(protocol, "KELON") == 0)
+    // {
+    //   PROTOCOL = 2;
+    // }
+    // else if (strcmp(protocol, "COOLIX") == 0)
+    // {
+    //   PROTOCOL = 3;
+    // }
+    // else if (strcmp(protocol, "SONY") == 0)
+    // {
+    //   PROTOCOL = 4;
+    // }
+    // else if (strcmp(protocol, "DAIKIN") == 0)
+    // {
+    //   PROTOCOL = 5;
+    // }
+    // else if (strcmp(protocol, "HAIER_AC") == 0)
+    // {
+    //   PROTOCOL = 6;
+    // }
+    // else if (strcmp(protocol, "WHIRLPOOL_AC") == 0)
+    // {
+    //   PROTOCOL = 7;
+    // }
+    // else if (strcmp(protocol, "TEKNOPOINT") == 0)
+    // {
+    //   PROTOCOL = 8;
+    // }
+    // else if (strcmp(protocol, "GREE") == 0)
+    // {
+    //   PROTOCOL = 9;
+    // }
+    // else if (strcmp(protocol, "TCL112AC") == 0)
+    // {
+    //   PROTOCOL = 10;
+    // }
+    // else if (strcmp(protocol, "TCL96AC") == 0)
+    // {
+    //   PROTOCOL = 11;
+    // }
+    // else if (strcmp(protocol, "SAMSUNG") == 0)
+    // {
+    //   PROTOCOL = 12;
+    // }
+    // else if (strcmp(protocol, "PRONTO") == 0)
+    // {
+    //   PROTOCOL = 13;
+    // }
+    // else if (strcmp(protocol, "PIONEER") == 0)
+    // {
+    //   PROTOCOL = 14;
+    // }
 
     // writeStringToEEPROM(prot_address, PROTOCOL);
     EEPROM.begin(512);
@@ -1289,7 +1291,7 @@ static int connectToAzureIoTHub()
 static void establishConnection()
 {
   generateWifiHost();
-  Serial.println("Starting Test...");
+  Serial.println("Launcing ac controller...");
   loadCredentials();
   loadMqqtParams();
   if (wifiSsid == "")
@@ -1353,30 +1355,41 @@ void setup()
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   // initializeWifi();
-  establishConnection();
+  //establishConnection();
 }
 
 void loop()
 {
+  ir_msg msg;
+  //TEMPERATURE = doc["temp"];
+  msg.protocol = 103;
+  msg.power = 1;
+  msg.fan_speed = FAN_SPEED;
+  msg.mode = MODE;
+  msg.temp = TEMPERATURE;
+  // sending ir command
+  send_ir(msg, ir_led);
+  delay(1000);
+  // Serial.println("ir command sent");
 
-  if (apStarted)
-  {
-    server.handleClient();
-  }
+  // if (apStarted)
+  // {
+  //   server.handleClient();
+  // }
 
-  if ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected())
-  {
-    Serial.println("Wifi not connected");
-    digitalWrite(LED_PIN, LOW);
-    establishConnection();
-    delay(2000);
-  }
-  else
-  {
+  // if ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected())
+  // {
+  //   Serial.println("Wifi not connected");
+  //   digitalWrite(LED_PIN, LOW);
+  //   establishConnection();
+  //   delay(2000);
+  // }
+  // else
+  // {
 
-    ArduinoOTA.handle();
-    mqtt_client.loop();
-    serverOTA.handleClient();
-    delay(500);
-  }
+  //   ArduinoOTA.handle();
+  //   mqtt_client.loop();
+  //   serverOTA.handleClient();
+  //   delay(500);
+  // }
 }
