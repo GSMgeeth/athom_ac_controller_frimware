@@ -72,7 +72,7 @@ bool is_protocol_set = false;
 int prot_address = 0;
 int temp_address = 20;
 int fanspeed_address = 22;
-int PROTOCOL = 2;
+int PROTOCOL = 103;
 int POWER = 2;
 int FAN_SPEED = 3;
 int MODE = 1;
@@ -119,6 +119,7 @@ static void initializeClients();
 void readStringFromEEPROM(int startAddress, char *buffer);
 void writeStringToEEPROM(int startAddress, const char *string);
 void saveDataToEEPROM();
+void saveProtocol();
 void loadDataFromEEPROM();
 void handleRoot();
 void handleSubmit();
@@ -341,7 +342,7 @@ void handleCm()
   int startPos = cmString.indexOf(" ") + 1; // Skip space
 
   // Split the substring starting from startPos by commas
-  String parts[8]; // Assuming there are 8 parts separated by commas
+  String parts[9]; // Assuming there are 8 parts separated by commas
   int count = 0;
   for (int i = startPos; i < cmString.length(); i++)
   {
@@ -363,6 +364,7 @@ void handleCm()
   String FullTopic = parts[5].substring(parts[5].indexOf(" ") + 1);
   String SSID1 = parts[6].substring(parts[6].indexOf(" ") + 1);
   String Password1 = parts[7].substring(parts[7].indexOf(" ") + 1);
+  String Protocol = parts[8].substring(parts[8].indexOf(" ") + 1);
 
   // Print the values to Serial
   Serial.println("MqttHost: " + MqttHost);
@@ -373,9 +375,12 @@ void handleCm()
   Serial.println("FullTopic: " + FullTopic);
   Serial.println("SSID1: " + SSID1);
   Serial.println("Password1: " + Password1);
+  Serial.println("Protocol: " + Protocol);
 
   saveCredentials(SSID1, Password1);
   saveMqttParams(MqttHost, MqttClient, MqttPassword);
+  PROTOCOL = Protocol.toInt(); 
+  saveProtocol();
   server.send(200, "text/html", "Configuration saved. Restarting...");
   WiFi.softAPdisconnect(true);
   Serial.println("Access Point ended.");
@@ -471,6 +476,7 @@ void loadCredentials()
   String ssidRes = file.readStringUntil('\n');
   String passwordRes = file.readStringUntil('\n');
   ssidRes.trim();
+
   passwordRes.trim();
   wifiSsid = ssidRes;
   wifiPw = passwordRes;
@@ -592,6 +598,15 @@ void saveDataToEEPROM()
   EEPROM.write(temp_address, TEMPERATURE);
   EEPROM.write(fanspeed_address, FAN_SPEED);
   EEPROM.end();
+}
+
+void saveProtocol()
+{
+  EEPROM.begin(512);
+  EEPROM.write(prot_address, PROTOCOL);
+  EEPROM.end();
+  Serial.print("Saving protocol: ");
+  Serial.println(PROTOCOL);
 }
 
 void loadDataFromEEPROM()
@@ -1002,70 +1017,66 @@ void receivedCallback(char *topic, byte *payload, unsigned int length)
   if (method == "protocol")
   {
     PROTOCOL = doc["protocol"];
-    //const char *protocol = doc["protocol"];
-    // if (strcmp(protocol, "LG2") == 0)
-    // {
-    //   PROTOCOL = 1;
-    // }
-    // else if (strcmp(protocol, "KELON") == 0)
-    // {
-    //   PROTOCOL = 2;
-    // }
-    // else if (strcmp(protocol, "COOLIX") == 0)
-    // {
-    //   PROTOCOL = 3;
-    // }
-    // else if (strcmp(protocol, "SONY") == 0)
-    // {
-    //   PROTOCOL = 4;
-    // }
-    // else if (strcmp(protocol, "DAIKIN") == 0)
-    // {
-    //   PROTOCOL = 5;
-    // }
-    // else if (strcmp(protocol, "HAIER_AC") == 0)
-    // {
-    //   PROTOCOL = 6;
-    // }
-    // else if (strcmp(protocol, "WHIRLPOOL_AC") == 0)
-    // {
-    //   PROTOCOL = 7;
-    // }
-    // else if (strcmp(protocol, "TEKNOPOINT") == 0)
-    // {
-    //   PROTOCOL = 8;
-    // }
-    // else if (strcmp(protocol, "GREE") == 0)
-    // {
-    //   PROTOCOL = 9;
-    // }
-    // else if (strcmp(protocol, "TCL112AC") == 0)
-    // {
-    //   PROTOCOL = 10;
-    // }
-    // else if (strcmp(protocol, "TCL96AC") == 0)
-    // {
-    //   PROTOCOL = 11;
-    // }
-    // else if (strcmp(protocol, "SAMSUNG") == 0)
-    // {
-    //   PROTOCOL = 12;
-    // }
-    // else if (strcmp(protocol, "PRONTO") == 0)
-    // {
-    //   PROTOCOL = 13;
-    // }
-    // else if (strcmp(protocol, "PIONEER") == 0)
-    // {
-    //   PROTOCOL = 14;
-    // }
+    // const char *protocol = doc["protocol"];
+    //  if (strcmp(protocol, "LG2") == 0)
+    //  {
+    //    PROTOCOL = 1;
+    //  }
+    //  else if (strcmp(protocol, "KELON") == 0)
+    //  {
+    //    PROTOCOL = 2;
+    //  }
+    //  else if (strcmp(protocol, "COOLIX") == 0)
+    //  {
+    //    PROTOCOL = 3;
+    //  }
+    //  else if (strcmp(protocol, "SONY") == 0)
+    //  {
+    //    PROTOCOL = 4;
+    //  }
+    //  else if (strcmp(protocol, "DAIKIN") == 0)
+    //  {
+    //    PROTOCOL = 5;
+    //  }
+    //  else if (strcmp(protocol, "HAIER_AC") == 0)
+    //  {
+    //    PROTOCOL = 6;
+    //  }
+    //  else if (strcmp(protocol, "WHIRLPOOL_AC") == 0)
+    //  {
+    //    PROTOCOL = 7;
+    //  }
+    //  else if (strcmp(protocol, "TEKNOPOINT") == 0)
+    //  {
+    //    PROTOCOL = 8;
+    //  }
+    //  else if (strcmp(protocol, "GREE") == 0)
+    //  {
+    //    PROTOCOL = 9;
+    //  }
+    //  else if (strcmp(protocol, "TCL112AC") == 0)
+    //  {
+    //    PROTOCOL = 10;
+    //  }
+    //  else if (strcmp(protocol, "TCL96AC") == 0)
+    //  {
+    //    PROTOCOL = 11;
+    //  }
+    //  else if (strcmp(protocol, "SAMSUNG") == 0)
+    //  {
+    //    PROTOCOL = 12;
+    //  }
+    //  else if (strcmp(protocol, "PRONTO") == 0)
+    //  {
+    //    PROTOCOL = 13;
+    //  }
+    //  else if (strcmp(protocol, "PIONEER") == 0)
+    //  {
+    //    PROTOCOL = 14;
+    //  }
 
     // writeStringToEEPROM(prot_address, PROTOCOL);
-    EEPROM.begin(512);
-    EEPROM.write(prot_address, PROTOCOL);
-    EEPROM.end();
-    Serial.print("Saving protocol: ");
-    Serial.println(PROTOCOL);
+    saveProtocol();
   }
 
   //   else if(method == "raw"){
@@ -1355,14 +1366,14 @@ void setup()
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   // initializeWifi();
-  //establishConnection();
+   establishConnection();
 }
 
 void loop()
 {
   ir_msg msg;
-  //TEMPERATURE = doc["temp"];
-  msg.protocol = 103;
+  // TEMPERATURE = doc["temp"];
+  msg.protocol = PROTOCOL;
   msg.power = 1;
   msg.fan_speed = FAN_SPEED;
   msg.mode = MODE;
@@ -1372,24 +1383,24 @@ void loop()
   delay(1000);
   // Serial.println("ir command sent");
 
-  // if (apStarted)
-  // {
-  //   server.handleClient();
-  // }
+  if (apStarted)
+  {
+    server.handleClient();
+  }
 
-  // if ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected())
-  // {
-  //   Serial.println("Wifi not connected");
-  //   digitalWrite(LED_PIN, LOW);
-  //   establishConnection();
-  //   delay(2000);
-  // }
-  // else
-  // {
+  if ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected())
+  {
+    Serial.println("Wifi not connected");
+    digitalWrite(LED_PIN, LOW);
+    establishConnection();
+    delay(2000);
+  }
+  else
+  {
 
-  //   ArduinoOTA.handle();
-  //   mqtt_client.loop();
-  //   serverOTA.handleClient();
-  //   delay(500);
-  // }
+    ArduinoOTA.handle();
+    mqtt_client.loop();
+    serverOTA.handleClient();
+    delay(500);
+  }
 }
