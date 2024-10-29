@@ -124,6 +124,8 @@ void loadDataFromEEPROM();
 void handleRoot();
 void handleSubmit();
 void handleCm();
+void handleStatus();
+void handleTestIR();
 void loadCredentials();
 void loadMqqtParams();
 bool connectToWiFi();
@@ -293,7 +295,7 @@ void generateWifiHost()
   char chipId[30];
   // std::string chipId = std::to_string(ESP_getChipId() & 0x1FFF);
   sprintf(chipId, "%u", ESP_getChipId() & 0x1FFF);
-  hostname = hostnameBase + hipen + networkId + hipen + chipId + "q";
+  hostname = hostnameBase + hipen + networkId + hipen + chipId;
   ssid = hostname;
 }
 
@@ -322,7 +324,12 @@ void startAPServer()
 
   // Handle form submission
   server.on("/submit", HTTP_POST, handleSubmit);
+  // Handle configuration data (wifi credentials, mqtt credentials and protocol)
   server.on("/cm", HTTP_GET, handleCm);
+  // Endpoint to send device state
+  server.on("/status", HTTP_GET, handleStatus);
+  // Endpoint to handle testing ir commands
+  server.on("/testIR", HTTP_GET, handleTestIR);
   server.begin();
   // delay(2000);
   // WiFi.softAPdisconnect(true);
@@ -379,13 +386,84 @@ void handleCm()
 
   saveCredentials(SSID1, Password1);
   saveMqttParams(MqttHost, MqttClient, MqttPassword);
-  PROTOCOL = Protocol.toInt(); 
+  PROTOCOL = Protocol.toInt();
   saveProtocol();
   server.send(200, "text/html", "Configuration saved. Restarting...");
   WiFi.softAPdisconnect(true);
   Serial.println("Access Point ended.");
   delay(2000);
   ESP.restart();
+}
+
+void handleStatus()
+{
+  Serial.println("Received request for /status");
+  StaticJsonDocument<200> jsonDoc;
+  jsonDoc["protocol"] = PROTOCOL;
+  jsonDoc["uptime"] = millis() / 1000;
+  jsonDoc["signalStrength"] = WiFi.RSSI();
+
+  String jsonResponse;
+  serializeJson(jsonDoc, jsonResponse);
+
+  server.send(200, "application/json", jsonResponse);
+  Serial.println("Response sent for /status");
+}
+
+void handleTestIR()
+{
+  // Get the command parameter from the URL
+  String command = server.arg("command");
+
+  // Initialize variables to hold the extracted values
+  int protocol = -1;
+  int power = -1;
+  int temp = -1;
+  int fan_speed = -1;
+
+  // Split the command by ';' to separate key-value pairs
+  int startPos = 0;
+  String parts[4]; // Assuming there are 4 parts separated by commas
+  int count = 0;
+  for (int i = startPos; i < command.length(); i++)
+  {
+    if (command.charAt(i) == ';')
+    {
+      parts[count++] = command.substring(startPos, i);
+      startPos = i + 2; // Skip the semicolon and space and move to next part
+    }
+  }
+  // Last part (no semicolon at the end)
+  parts[count++] = command.substring(startPos);
+
+  // Assign each part to separate variables
+  protocol = parts[0].substring(parts[0].indexOf(" ") + 1).toInt();
+  power = parts[1].substring(parts[1].indexOf(" ") + 1).toInt();
+  temp = parts[2].substring(parts[2].indexOf(" ") + 1).toInt();
+  fan_speed = parts[3].substring(parts[3].indexOf(" ") + 1).toInt();
+  // Print results to Serial Monitor
+  Serial.print("Protocol: ");
+  Serial.println(protocol);
+  Serial.print("Power: ");
+  Serial.println(power);
+  Serial.print("Temperature: ");
+  Serial.println(temp);
+  Serial.print("Fan Speed: ");
+  Serial.println(fan_speed);
+
+  ir_msg msg;
+  msg.protocol = protocol;
+  msg.power = power;
+  msg.fan_speed = fan_speed;
+  msg.mode = MODE;
+  msg.temp = temp;
+  // sending ir command
+  send_ir(msg, ir_led);
+  // Serial.println("ir command sent");
+
+  // Send response back to client
+  String response = "IR command sent";
+  server.send(200, "text/plain", response);
 }
 
 void handleSubmit()
@@ -1305,7 +1383,7 @@ static void establishConnection()
   Serial.println("Launcing ac controller...");
   loadCredentials();
   loadMqqtParams();
-  if (wifiSsid == "")
+  if (wifiSsid == "") /////////////////////////change for testing purposes////////////////// original =  if (wifiSsid == "")//////////////////////////
   {
     startAPServer();
   }
@@ -1366,34 +1444,34 @@ void setup()
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
   // initializeWifi();
-   establishConnection();
+  establishConnection();
 }
 
 void loop()
 {
-  ir_msg msg;
-  // TEMPERATURE = doc["temp"];
-  msg.protocol = PROTOCOL;
-  msg.power = 1;
-  msg.fan_speed = FAN_SPEED;
-  msg.mode = MODE;
-  msg.temp = TEMPERATURE;
-  // sending ir command
-  send_ir(msg, ir_led);
-  delay(1000);
-  // Serial.println("ir command sent");
+  // ir_msg msg;
+  // // TEMPERATURE = doc["temp"];
+  // msg.protocol = PROTOCOL;
+  // msg.power = 1;
+  // msg.fan_speed = FAN_SPEED;
+  // msg.mode = MODE;
+  // msg.temp = TEMPERATURE;
+  // // sending ir command
+  // send_ir(msg, ir_led);
+  // delay(1000);
+  // // Serial.println("ir command sent");
 
   if (apStarted)
   {
     server.handleClient();
   }
 
-  if ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected())
+  if ((wifiSsid != "") && ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected()))
   {
     Serial.println("Wifi not connected");
     digitalWrite(LED_PIN, LOW);
     establishConnection();
-    delay(2000);
+    delay(10000);
   }
   else
   {
