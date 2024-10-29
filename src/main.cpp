@@ -126,6 +126,7 @@ void handleSubmit();
 void handleCm();
 void handleStatus();
 void handleTestIR();
+void handleIP();
 void loadCredentials();
 void loadMqqtParams();
 bool connectToWiFi();
@@ -330,6 +331,8 @@ void startAPServer()
   server.on("/status", HTTP_GET, handleStatus);
   // Endpoint to handle testing ir commands
   server.on("/testIR", HTTP_GET, handleTestIR);
+  // Endpoit to send ip address to be connected on router endpoint
+  server.on("/ip", HTTP_GET, handleIP);
   server.begin();
   // delay(2000);
   // WiFi.softAPdisconnect(true);
@@ -464,6 +467,15 @@ void handleTestIR()
   // Send response back to client
   String response = "IR command sent";
   server.send(200, "text/plain", response);
+}
+
+void handleIP(){
+  String ip = WiFi.localIP().toString();
+  StaticJsonDocument<200> jsonDoc;
+  jsonDoc["IP"] = ip;
+  String jsonResponse;
+  serializeJson(jsonDoc, jsonResponse);
+  server.send(200, "application/json", jsonResponse); 
 }
 
 void handleSubmit()
