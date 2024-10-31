@@ -40,10 +40,25 @@
 #include <IRrecv.h>
 #include <IRsend.h>
 #include <IRutils.h>
+#include <assert.h>
+#include <IRac.h>
+#include <IRtext.h>
 
 const uint16_t ir_led = 4;
 IRsend irsend(ir_led);
-const int RECV_PIN = 5;
+const int kRecvPin = 5;
+const uint16_t kCaptureBufferSize = 1024;
+#if DECODE_AC
+// Some A/C units have gaps in their protocols of ~40ms. e.g. Kelvinator
+// A value this large may swallow repeats of some protocols
+const uint8_t kTimeout = 50;
+#else  // DECODE_AC
+// Suits most messages, while not swallowing many repeats.
+const uint8_t kTimeout = 15;
+#endif // DECODE_AC
+const uint16_t kMinUnknownSize = 12;
+const uint8_t kTolerancePercentage = kTolerance; // kTolerance is normally 25%
+#define LEGACY_TIMING_INFO false
 // const uint16_t led = 13;
 
 // const char* ssid = "chathushka";
@@ -65,14 +80,15 @@ String firmwareURL = "";
 ESP8266WebServer server(80);
 ESP8266WebServer serverOTA(80);
 unsigned long lastSerialReadTime = 0;
-IRrecv irrecv(RECV_PIN);
-decode_results results;
+IRrecv irrecv(kRecvPin, kCaptureBufferSize, kTimeout, true);
+decode_results results; // Somewhere to store the results
 bool is_protocol_set = false;
+
 
 int prot_address = 0;
 int temp_address = 20;
 int fanspeed_address = 22;
-int PROTOCOL = 103;
+int PROTOCOL = -1;
 int POWER = 2;
 int FAN_SPEED = 3;
 int MODE = 1;
@@ -145,18 +161,44 @@ void recieveProtocol();
 // Auxiliary functions
 void recieveProtocol()
 {
-  String prot;
-  if (irrecv.decode(&results))
+  // variables to create timer for recieving protocol
+  const unsigned long interval = 60000; // 1 minute in milliseconds
+  unsigned long previousMillis = millis();
+  Serial.println("Waiting for IR code...");
+  while (millis() - previousMillis <= interval)
   {
-    Serial.println("Received IR Code:");
-    Serial.println(static_cast<unsigned long>(results.value), HEX);
-    unsigned long decoded_protocol = static_cast<unsigned long>(results.decode_type);
-    // String decoded_protocol = String(decoded_protocol);
-    if (decoded_protocol = 4)
-      prot = SONY;
-    else if (decoded_protocol = 5)
-      prot = PANASONIC;
+    if (irrecv.decode(&results))
+    {
+      // Serial.println("Received IR Code:");
+      // Serial.println(static_cast<unsigned long>(results.value), HEX);
+      // // unsigned long decoded_protocol = static_cast<unsigned long>(results.decode_type);
+      // PROTOCOL = static_cast<int>(results.decode_type);
+      // // String decoded_protocol = String(decoded_protocol);
+      // irrecv.disableIRIn();
+      // Display the tolerance percentage if it has been change from the default.
+      if (kTolerancePercentage != kTolerance)
+        Serial.printf(D_STR_TOLERANCE " : %d%%\n", kTolerancePercentage);
+      // Display the basic output of what we found.
+      Serial.print(resultToHumanReadableBasic(&results));
+      Serial.println();
+      Serial.print("Decoded PROTOCOL in int: ");
+      PROTOCOL = static_cast<int>(results.decode_type);
+      Serial.println(PROTOCOL);
+
+      yield(); // Feed the WDT as the text output can take a while to print.
+#if LEGACY_TIMING_INFO
+      // Output legacy RAW timing info of the result.
+      Serial.println(resultToTimingInfo(&results));
+      yield(); // Feed the WDT (again)
+#endif         // LEGACY_TIMING_INFO
+      // Output the results as source code
+      yield(); // Feed the WDT (again)
+      return;
+    }
+    yield(); // Feed the WDT (again)
   }
+  // irrecv.resume();
+  Serial.println("Timeout: No IR command received within 1 minute.");
 }
 
 void updateFirmware(String url)
@@ -392,15 +434,17 @@ void handleCm()
   PROTOCOL = Protocol.toInt();
   saveProtocol();
   server.send(200, "text/html", "Configuration saved. Restarting...");
+  delay(500);
   WiFi.softAPdisconnect(true);
   Serial.println("Access Point ended.");
-  delay(2000);
+  delay(100);
   ESP.restart();
 }
 
 void handleStatus()
 {
   Serial.println("Received request for /status");
+  recieveProtocol();
   StaticJsonDocument<200> jsonDoc;
   jsonDoc["protocol"] = PROTOCOL;
   jsonDoc["uptime"] = millis() / 1000;
@@ -469,13 +513,14 @@ void handleTestIR()
   server.send(200, "text/plain", response);
 }
 
-void handleIP(){
+void handleIP()
+{
   String ip = WiFi.localIP().toString();
   StaticJsonDocument<200> jsonDoc;
   jsonDoc["IP"] = ip;
   String jsonResponse;
   serializeJson(jsonDoc, jsonResponse);
-  server.send(200, "application/json", jsonResponse); 
+  server.send(200, "application/json", jsonResponse);
 }
 
 void handleSubmit()
@@ -1455,6 +1500,12 @@ void setup()
   Serial.begin(115200);
   pinMode(LED_PIN, OUTPUT);
   digitalWrite(LED_PIN, LOW);
+#if DECODE_HASH
+  // Ignore messages with less than minimum on or off pulses.
+  irrecv.setUnknownThreshold(kMinUnknownSize);
+#endif                                       // DECODE_HASH
+  irrecv.setTolerance(kTolerancePercentage); // Override the default tolerance.
+  irrecv.enableIRIn();                       // Start the receiver
   // initializeWifi();
   establishConnection();
 }
