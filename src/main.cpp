@@ -47,6 +47,7 @@
 const uint16_t ir_led = 4;
 IRsend irsend(ir_led);
 const int kRecvPin = 5;
+const int buttonPin = 0; // Push button connected to digital pin 2
 const uint16_t kCaptureBufferSize = 1024;
 #if DECODE_AC
 // Some A/C units have gaps in their protocols of ~40ms. e.g. Kelvinator
@@ -83,6 +84,13 @@ unsigned long lastSerialReadTime = 0;
 IRrecv irrecv(kRecvPin, kCaptureBufferSize, kTimeout, true);
 decode_results results; // Somewhere to store the results
 bool is_protocol_set = false;
+// Variables to hold button state
+int buttonState = 0;
+int lastButtonState = 0;
+
+// Variables for timing the long press
+unsigned long lastDebounceTime = 0;
+unsigned long longPressInterval = 2000; // Adjust this value for long press duration
 
 
 int prot_address = 0;
@@ -157,8 +165,17 @@ void handleGetFirmwareURL();
 void updateFirmware(String url);
 void setOTA();
 void recieveProtocol();
+void handleLongPress();
 
 // Auxiliary functions
+
+void handleLongPress() {
+  Serial.println("Long press detected. Erasing EEPROM and resetting ESP8266...");
+  // Erase EEPROM - Replace with your EEPROM library's function
+  // Reset ESP8266
+  LittleFS.format();
+  ESP.restart();
+}
 void recieveProtocol()
 {
   // variables to create timer for recieving protocol
@@ -459,6 +476,7 @@ void handleStatus()
 
 void handleTestIR()
 {
+  Serial.println("Recieved request for /test");
   // Get the command parameter from the URL
   String command = server.arg("command");
 
@@ -1499,6 +1517,7 @@ void setup()
 {
   Serial.begin(115200);
   pinMode(LED_PIN, OUTPUT);
+  pinMode(buttonPin, INPUT);
   digitalWrite(LED_PIN, LOW);
 #if DECODE_HASH
   // Ignore messages with less than minimum on or off pulses.
@@ -1534,14 +1553,31 @@ void loop()
     Serial.println("Wifi not connected");
     digitalWrite(LED_PIN, LOW);
     establishConnection();
-    delay(10000);
+    delay(30000);
   }
   else
   {
-
     ArduinoOTA.handle();
     mqtt_client.loop();
     serverOTA.handleClient();
     delay(500);
   }
+
+  int reading = digitalRead(buttonPin);
+
+  // Check if the button state has changed
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis(); // Reset the debounce timer
+  }
+
+  // Check for long press
+  if ((millis() - lastDebounceTime) > longPressInterval) {
+    if (reading == LOW) {
+      handleLongPress(); // Call function to handle long press
+    }
+  }
+
+  // Save the current button state for the next loop iteration
+  lastButtonState = reading;
+
 }
