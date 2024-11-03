@@ -406,8 +406,13 @@ void generateWifiHost()
 
 void handleRoot()
 {
-
-  server.send(200, "text/html", homePage);
+    File file = LittleFS.open("/index.html", "r");  // Open the file from LittleFS
+    if (!file) {
+        server.send(404, "text/plain", "File not found");
+        return;
+    }
+    server.streamFile(file, "text/html");  // Stream file contents
+    file.close();
 }
 void startAPServer()
 {
@@ -415,11 +420,12 @@ void startAPServer()
   // Set up AP (Access Point)
   WiFi.softAP(ssid);
   Serial.println("AP Started. Connect to network: " + String(ssid));
-
+    if (!LittleFS.begin()) {
+        Serial.println("An error has occurred while mounting LittleFS");
+        return;
+    }
   // Handle root URL ("/")
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send(LittleFS, "/index.html", "text/html");  // or SPIFFS
-});
+  server.on("/", HTTP_GET, handleRoot);
 
   // Handle form submission
   server.on("/submit", HTTP_POST, handleSubmit);
