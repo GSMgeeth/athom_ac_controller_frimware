@@ -48,7 +48,7 @@ const uint16_t ir_led = 4;
 IRsend irsend(ir_led);
 const int kRecvPin = 5;
 const int buttonPin = 0; // Push button connected to digital pin 2
-const uint16_t kCaptureBufferSize = 1024;
+const uint16_t kCaptureBufferSize = 300;
 #if DECODE_AC
 // Some A/C units have gaps in their protocols of ~40ms. e.g. Kelvinator
 // A value this large may swallow repeats of some protocols
@@ -60,6 +60,7 @@ const uint8_t kTimeout = 15;
 const uint16_t kMinUnknownSize = 12;
 const uint8_t kTolerancePercentage = kTolerance; // kTolerance is normally 25%
 #define LEGACY_TIMING_INFO false
+
 // const uint16_t led = 13;
 
 // const char* ssid = "chathushka";
@@ -82,6 +83,8 @@ ESP8266WebServer server(80);
 ESP8266WebServer serverOTA(80);
 unsigned long lastSerialReadTime = 0;
 IRrecv irrecv(kRecvPin, kCaptureBufferSize, kTimeout, true);
+// IRrecv irrecv(kRecvPin);
+
 decode_results results; // Somewhere to store the results
 bool is_protocol_set = false;
 // Variables to hold button state
@@ -92,11 +95,15 @@ int lastButtonState = 0;
 unsigned long lastDebounceTime = 0;
 unsigned long longPressInterval = 2000; // Adjust this value for long press duration
 
+// volatile bool buttonPressed = false; // Flag for button press
+// unsigned long pressStartTime = 0;
+// unsigned long longPressInterval = 2000; // 2 seconds for a long press
 
 int prot_address = 0;
 int temp_address = 20;
 int fanspeed_address = 22;
 int PROTOCOL = -1;
+int PROTOCOL_RECV = -1;
 int POWER = 2;
 int FAN_SPEED = 3;
 int MODE = 1;
@@ -115,13 +122,6 @@ int TEMPERATURE = 22;
 
 #define INCOMING_DATA_BUFFER_SIZE 256
 static char incoming_data[INCOMING_DATA_BUFFER_SIZE];
-
-// Translate iot_configs.h defines into variables used by the sample
-// static const char* ssid = IOT_CONFIG_WIFI_SSID;
-// static const char* password = IOT_CONFIG_WIFI_PASSWORD;
-// static const char* host = IOT_CONFIG_IOTHUB_FQDN;
-// static const char* device_id = IOT_CONFIG_DEVICE_ID;
-// static const char* device_key = IOT_CONFIG_DEVICE_KEY;
 static const int port = 8883;
 
 // Memory allocated for the sample's variables and structures.
@@ -133,10 +133,6 @@ static char sas_token[200];
 static uint8_t signature[512];
 static unsigned char encrypted_signature[32];
 static char base64_decoded_device_key[32];
-// static unsigned long next_telemetry_send_time_ms = 0;
-//  static char telemetry_topic[128];
-//  static uint8_t telemetry_payload[100];
-//  static uint32_t telemetry_send_count = 0;
 
 // function definitions
 static void initializeClients();
@@ -165,18 +161,45 @@ void handleGetFirmwareURL();
 void updateFirmware(String url);
 void setOTA();
 void recieveProtocol();
+void recieveProtocolWithTimer();
 void handleLongPress();
-
+// void IRAM_ATTR handleButtonPress();
+void clearEEPROM();
 // Auxiliary functions
 
-void handleLongPress() {
+void clearEEPROM()
+{
+  EEPROM.begin(512); // Adjust size if needed
+
+  // Clear EEPROM
+  for (int i = 0; i < 512; i++)
+  {
+    EEPROM.write(i, 0);
+  }
+  EEPROM.commit();
+
+  Serial.println("EEPROM cleared. Restarting...");
+}
+
+// void IRAM_ATTR handleButtonPress()
+// {
+//   if (digitalRead(buttonPin) == LOW)
+//   {
+//     buttonPressed = true;
+//     pressStartTime = millis();
+//   }
+// }
+
+void handleLongPress()
+{
   Serial.println("Long press detected. Erasing EEPROM and resetting ESP8266...");
   // Erase EEPROM - Replace with your EEPROM library's function
   // Reset ESP8266
   LittleFS.format();
+  clearEEPROM();
   ESP.restart();
 }
-void recieveProtocol()
+void recieveProtocolWithTimer()
 {
   // variables to create timer for recieving protocol
   const unsigned long interval = 60000; // 1 minute in milliseconds
@@ -186,12 +209,6 @@ void recieveProtocol()
   {
     if (irrecv.decode(&results))
     {
-      // Serial.println("Received IR Code:");
-      // Serial.println(static_cast<unsigned long>(results.value), HEX);
-      // // unsigned long decoded_protocol = static_cast<unsigned long>(results.decode_type);
-      // PROTOCOL = static_cast<int>(results.decode_type);
-      // // String decoded_protocol = String(decoded_protocol);
-      // irrecv.disableIRIn();
       // Display the tolerance percentage if it has been change from the default.
       if (kTolerancePercentage != kTolerance)
         Serial.printf(D_STR_TOLERANCE " : %d%%\n", kTolerancePercentage);
@@ -210,12 +227,40 @@ void recieveProtocol()
 #endif         // LEGACY_TIMING_INFO
       // Output the results as source code
       yield(); // Feed the WDT (again)
+      irrecv.resume();
       return;
     }
     yield(); // Feed the WDT (again)
   }
-  // irrecv.resume();
+  irrecv.resume();
   Serial.println("Timeout: No IR command received within 1 minute.");
+}
+
+void recieveProtocol()
+{
+  // Serial.println("Waiting for IR code...");
+  if (irrecv.decode(&results))
+  {
+    // Display the tolerance percentage if it has been change from the default.
+    if (kTolerancePercentage != kTolerance)
+      Serial.printf(D_STR_TOLERANCE " : %d%%\n", kTolerancePercentage);
+    // Display the basic output of what we found.
+    Serial.print(resultToHumanReadableBasic(&results));
+    Serial.println();
+    Serial.print("Decoded PROTOCOL in int: ");
+    PROTOCOL_RECV = static_cast<int>(results.decode_type);
+    Serial.println(PROTOCOL_RECV);
+
+    yield(); // Feed the WDT as the text output can take a while to print.
+#if LEGACY_TIMING_INFO
+    // Output legacy RAW timing info of the result.
+    Serial.println(resultToTimingInfo(&results));
+    yield(); // Feed the WDT (again)
+#endif       // LEGACY_TIMING_INFO
+    // Output the results as source code
+    yield(); // Feed the WDT (again)
+    irrecv.resume();
+  }
 }
 
 void updateFirmware(String url)
@@ -461,9 +506,9 @@ void handleCm()
 void handleStatus()
 {
   Serial.println("Received request for /status");
-  recieveProtocol();
+  // recieveProtocol();
   StaticJsonDocument<200> jsonDoc;
-  jsonDoc["protocol"] = PROTOCOL;
+  jsonDoc["protocol"] = PROTOCOL_RECV;
   jsonDoc["uptime"] = millis() / 1000;
   jsonDoc["signalStrength"] = WiFi.RSSI();
 
@@ -684,8 +729,13 @@ bool connectToWiFi()
 
   // Wait until connected or timeout (10 seconds)
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30)
+  while (WiFi.status() != WL_CONNECTED && attempts < 10)
   {
+    int reading = digitalRead(buttonPin);
+    if (reading == LOW)
+    {
+      return false;
+    }
     delay(1000);
     Serial.print(".");
     attempts++;
@@ -1466,17 +1516,20 @@ static void establishConnection()
   {
     WiFi.mode(WIFI_STA);
     isWifiConnected = connectToWiFi();
-    delay(5000);
-    if (!isWifiConnected)
+
+    // delay(5000);
+    //  if (!isWifiConnected)
+    //  {
+    //    Serial.print("isWifiConnected = ");
+    //    Serial.println(isWifiConnected);
+    //    delay(30000);
+    //    ESP.restart();
+    //  }
+    //  else
+    //  {
+    //  connectToWiFi();
+    if (isWifiConnected)
     {
-      Serial.print("isWifiConnected = ");
-      Serial.println(isWifiConnected);
-      delay(30000);
-      ESP.restart();
-    }
-    else
-    {
-      // connectToWiFi();
       setOTA();
       startServerOTA();
       initializeTime();
@@ -1496,9 +1549,10 @@ static void establishConnection()
       {
         connectToAzureIoTHub();
       }
-
-      // digitalWrite(LED_PIN, LOW);
     }
+
+    // digitalWrite(LED_PIN, LOW);
+    // }
   }
 }
 
@@ -1517,7 +1571,10 @@ void setup()
 {
   Serial.begin(115200);
   pinMode(LED_PIN, OUTPUT);
-  pinMode(buttonPin, INPUT);
+  // pinMode(buttonPin, INPUT);
+  pinMode(buttonPin, INPUT_PULLUP);
+  // attachInterrupt(digitalPinToInterrupt(buttonPin), handleButtonPress, FALLING);
+
   digitalWrite(LED_PIN, LOW);
 #if DECODE_HASH
   // Ignore messages with less than minimum on or off pulses.
@@ -1545,16 +1602,47 @@ void loop()
 
   if (apStarted)
   {
+    recieveProtocol();
     server.handleClient();
   }
 
-  if ((wifiSsid != "") && ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected()))
+  //////////////////////Handle reset with long press////////////////////////////////////////////////////////////////////////////////////
+  int reading = digitalRead(buttonPin);
+
+  // Check if the button state has changed
+  if (reading != lastButtonState)
+  {
+    lastDebounceTime = millis(); // Reset the debounce timer
+  }
+
+  // Check for long press
+  if ((millis() - lastDebounceTime) > longPressInterval)
+  {
+    if (reading == LOW)
+    {
+      handleLongPress(); // Call function to handle long press
+    }
+  }
+  // Save the current button state for the next loop iteration
+  lastButtonState = reading;
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // if ((wifiSsid != "") && ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected()))
+  if ((wifiSsid != "") && (WiFi.status() != WL_CONNECTED))
   {
     Serial.println("Wifi not connected");
     digitalWrite(LED_PIN, LOW);
     establishConnection();
-    delay(30000);
+    delay(500);
   }
+  // int attempts = 0;
+  //  while (WiFi.status() != WL_CONNECTED && attempts < 10)
+  //  {
+  //    delay(1000);
+  //    Serial.print(".");
+  //    attempts++;
+  //  }
+
   else
   {
     ArduinoOTA.handle();
@@ -1563,21 +1651,19 @@ void loop()
     delay(500);
   }
 
-  int reading = digitalRead(buttonPin);
+  // if (buttonPressed)
+  // {
+  //   unsigned long currentPressTime = millis();
 
-  // Check if the button state has changed
-  if (reading != lastButtonState) {
-    lastDebounceTime = millis(); // Reset the debounce timer
-  }
+  //   // Check if button has been held down for long press interval
+  //   if (currentPressTime - pressStartTime >= longPressInterval)
+  //   {
+  //     Serial.println("Long press detected. Formatting LittleFS and resetting...");
+  //     LittleFS.format();
+  //     ESP.restart();
+  //   }
 
-  // Check for long press
-  if ((millis() - lastDebounceTime) > longPressInterval) {
-    if (reading == LOW) {
-      handleLongPress(); // Call function to handle long press
-    }
-  }
-
-  // Save the current button state for the next loop iteration
-  lastButtonState = reading;
-
+  //   // Reset the flag after handling
+  //   buttonPressed = false;
+  // }
 }
