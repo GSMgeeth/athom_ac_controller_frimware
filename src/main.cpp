@@ -248,8 +248,12 @@ void recieveProtocol()
     Serial.print(resultToHumanReadableBasic(&results));
     Serial.println();
     Serial.print("Decoded PROTOCOL in int: ");
-    PROTOCOL_RECV = static_cast<int>(results.decode_type);
     Serial.println(PROTOCOL_RECV);
+    int recieved_prot = static_cast<int>(results.decode_type);
+    if (recieved_prot != -1){
+      PROTOCOL_RECV = recieved_prot;
+    }
+    
 
     yield(); // Feed the WDT as the text output can take a while to print.
 #if LEGACY_TIMING_INFO
