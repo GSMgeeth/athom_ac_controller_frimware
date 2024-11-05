@@ -48,7 +48,7 @@ const uint16_t ir_led = 4;
 IRsend irsend(ir_led);
 const int kRecvPin = 5;
 const int buttonPin = 0; // Push button connected to digital pin 2
-const uint16_t kCaptureBufferSize = 300;
+const uint16_t kCaptureBufferSize = 400;
 #if DECODE_AC
 // Some A/C units have gaps in their protocols of ~40ms. e.g. Kelvinator
 // A value this large may swallow repeats of some protocols
