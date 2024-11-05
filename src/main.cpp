@@ -409,15 +409,7 @@ void generateWifiHost()
   ssid = hostname;
 }
 
-
-
-
-void handleRoot() {
-    server.setContentLength(CONTENT_LENGTH_UNKNOWN);  // Set to unknown to enable chunked transfer
-    server.send(200, "text/html", "");  // Start response
-
-    // Sending each part of the HTML page
-    server.sendContent(R"(<!DOCTYPE html>
+const char chunk1[] PROGMEM =R"(<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -479,9 +471,9 @@ void handleRoot() {
       color: #666;
     }
   </style>
-</head>)");
-  
-     server.sendContent(R"rawliteral(<body>
+</head>)";
+
+const char chunk2[] PROGMEM =R"rawliteral(<body>
 <div class="container">
   <h2>ESP8266 Configuration</h2>
   <form id="config-form" onsubmit="return saveConfig()">
@@ -525,11 +517,9 @@ void handleRoot() {
   </div>
 
   <div class="status" id="status-message"></div>
-</div>)rawliteral");
+</div>)rawliteral";
 
-
-
-     server.sendContent(R"rawliteral(
+const char chunk3[] PROGMEM =R"rawliteral(
 <script>
 
   const protocols = "UNKNOWN,UNUSED,RC5,RC6,NEC,SONY,PANASONIC,JVC,SAMSUNG,WHYNTER,AIWA_RC_T501,LG,SANYO,MITSUBISHI,DISH,SHARP,COOLIX,DAIKIN,DENON,KELVINATOR,SHERWOOD,MITSUBISHI_AC,RCMM,SANYO_LC7461,RC5X,GREE,PRONTO,NEC_LIKE,ARGO,TROTEC,NIKAI,RAW,GLOBALCACHE,TOSHIBA_AC,FUJITSU_AC,MIDEA,MAGIQUEST,LASERTAG,CARRIER_AC,HAIER_AC,MITSUBISHI2,HITACHI_AC,HITACHI_AC1,HITACHI_AC2,GICABLE,HAIER_AC_YRW02,WHIRLPOOL_AC,SAMSUNG_AC,LUTRON,ELECTRA_AC,PANASONIC_AC,PIONEER,LG2,MWM,DAIKIN2,VESTEL_AC,TECO,SAMSUNG36,TCL112AC,LEGOPF,MITSUBISHI_HEAVY_88,MITSUBISHI_HEAVY_152,DAIKIN216,SHARP_AC,GOODWEATHER,INAX,DAIKIN160,NEOCLIMA,DAIKIN176,DAIKIN128,AMCOR,DAIKIN152,MITSUBISHI136,MITSUBISHI112,HITACHI_AC424,SONY_38K,EPSON,SYMPHONY,HITACHI_AC3,DAIKIN64,AIRWELL,DELONGHI_AC,DOSHISHA,MULTIBRACKETS,CARRIER_AC40,CARRIER_AC64,HITACHI_AC344,CORONA_AC,MIDEA24,ZEPEAL,SANYO_AC,VOLTAS,METZ,TRANSCOLD,TECHNIBEL_AC,MIRAGE,ELITESCREENS,PANASONIC_AC32,MILESTAG2,ECOCLIM,XMP,TRUMA,HAIER_AC176,TEKNOPOINT,KELON,TROTEC_3550,SANYO_AC88,BOSE,ARRIS,RHOSS,AIRTON,COOLIX48,HITACHI_AC264,KELON168,HITACHI_AC296,DAIKIN200,HAIER_AC160,CARRIER_AC128,TOTO,CLIMABUTLER,TCL96AC,BOSCH144,SANYO_AC152,DAIKIN312,GORENJE,WOWWEE,CARRIER_AC84,YORK";
@@ -575,9 +565,8 @@ void handleRoot() {
       });
     return false;
   }
-)rawliteral");
-
-     server.sendContent(R"rawliteral(
+)rawliteral";
+const char chunk4[] PROGMEM =R"rawliteral(
   function sendTestCommand() {
     const protocol = document.getElementById('test-protocol').value;
     const url = `http://192.168.4.1/testIR?command=protocol%20${protocol}%3B%20power%201%3B%20temp%2021%3B%20fan_speed%202%3B`;
@@ -611,7 +600,15 @@ void handleRoot() {
 </script>
 </body>
 </html>
-)rawliteral");
+)rawliteral";
+void handleRoot() {
+    server.setContentLength(CONTENT_LENGTH_UNKNOWN);  // Set to unknown to enable chunked transfer
+    server.send(200, "text/html", "");  // Start response
+    // Sending each part of the HTML page
+      server.sendContent_P(chunk1);
+      server.sendContent_P(chunk2);
+      server.sendContent_P(chunk3);
+     server.sendContent_P(chunk4);
     server.sendContent("");  // End of chunked response
 }
 void startAPServer()
