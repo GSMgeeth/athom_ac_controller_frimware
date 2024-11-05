@@ -178,7 +178,8 @@
     fetch('http://192.168.4.1/status')
       .then(response => response.json())
       .then(data => {
-        document.getElementById('detected-protocol').innerText = data.detectedProtocol || 'None';
+
+        document.getElementById('detected-protocol').innerText = protocolArray[parseInt(data.detectedProtocol)+1] || 'None';
       })
       .catch(error => {
         console.error('Error fetching status:', error);
