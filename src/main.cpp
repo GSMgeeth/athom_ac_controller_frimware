@@ -152,8 +152,8 @@ void loadMqqtParams();
 bool connectToWiFi();
 void startAPServer();
 void startServerOTA();
-void saveCredentials(String ssid, String password);
-void saveMqttParams(String MqttHost, String MqttClient, String MqttPassword);
+void saveCredentials(String ssid = "", String password = "");
+void saveMqttParams(String MqttHost = "", String MqttClient = "", String MqttPassword = "");
 void saveURL(String URL, String updateStarted);
 String NetworkUniqueId(void);
 uint32_t ESP_getChipId(void);
@@ -195,7 +195,8 @@ void handleLongPress()
   Serial.println("Long press detected. Erasing EEPROM and resetting ESP8266...");
   // Erase EEPROM - Replace with your EEPROM library's function
   // Reset ESP8266
-  LittleFS.format();
+  saveCredentials();
+  saveMqttParams();
   clearEEPROM();
   ESP.restart();
 }
@@ -512,7 +513,7 @@ void handleStatus()
   Serial.println("Received request for /status");
   // recieveProtocol();
   StaticJsonDocument<200> jsonDoc;
-  jsonDoc["protocol"] = PROTOCOL_RECV;
+  jsonDoc["detectedProtocol"] = PROTOCOL_RECV;
   jsonDoc["uptime"] = millis() / 1000;
   jsonDoc["signalStrength"] = WiFi.RSSI();
 
@@ -1573,7 +1574,7 @@ static void establishConnection()
 
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(115200,SERIAL_8N1, SERIAL_TX_ONLY);
   pinMode(LED_PIN, OUTPUT);
   // pinMode(buttonPin, INPUT);
   pinMode(buttonPin, INPUT_PULLUP);
