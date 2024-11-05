@@ -9,29 +9,24 @@ void send_ir(ir_msg &msg, int kIrLed){
     // setting up states of the AC
     // protocol LG2 and KELON
     decode_type_t protocol;
-    // if(msg.protocol == "LG2") {protocol = LG2;}
-    // else if (msg.protocol == "KELON"){ protocol = KELON;}
-    // else if (msg.protocol == "COOLIX"){ protocol = COOLIX;}
-    // else if (msg.protocol == "SONY"){ protocol = SONY;}
-    // else if (msg.protocol == "DAIK IN"){ protocol = DAIKIN;}
-    // else if (msg.protocol == "HAIER_AC"){ protocol = HAIER_AC;}
-    // else if (msg.protocol == "WHIRLPOOL_AC"){ protocol = WHIRLPOOL_AC;}
-    if(msg.protocol == 1) {protocol = LG2;}
-    else if (msg.protocol == 2){ protocol = KELON;}
-    else if (msg.protocol == 3){ protocol = COOLIX;}
-    else if (msg.protocol == 4){ protocol = SONY;}
-    else if (msg.protocol == 5){ protocol = DAIKIN;}
-    else if (msg.protocol == 6){ protocol = HAIER_AC;}
-    else if (msg.protocol == 7){ protocol = WHIRLPOOL_AC;}
-    else if (msg.protocol == 8){ protocol = TEKNOPOINT;}
-    else if (msg.protocol == 9){ protocol = GREE;}
-    else if (msg.protocol == 10){ protocol = TCL112AC;}
-    else if (msg.protocol == 11){ protocol = TCL96AC;}
-    else if (msg.protocol == 12){ protocol = SAMSUNG;}
-    else if (msg.protocol == 13){ protocol = PRONTO;}
-    else if (msg.protocol == 14){ protocol = PIONEER;}
+    // if(msg.protocol == 1) {protocol = LG2;}
+    // else if (msg.protocol == 2){ protocol = KELON;}
+    // else if (msg.protocol == 3){ protocol = COOLIX;}
+    // else if (msg.protocol == 4){ protocol = SONY;}
+    // else if (msg.protocol == 5){ protocol = DAIKIN;}
+    // else if (msg.protocol == 6){ protocol = HAIER_AC;}
+    // else if (msg.protocol == 7){ protocol = WHIRLPOOL_AC;}
+    // else if (msg.protocol == 8){ protocol = TEKNOPOINT;}
+    // else if (msg.protocol == 9){ protocol = GREE;}
+    // else if (msg.protocol == 10){ protocol = TCL112AC;}
+    // else if (msg.protocol == 11){ protocol = TCL96AC;}
+    // else if (msg.protocol == 12){ protocol = SAMSUNG;}
+    // else if (msg.protocol == 13){ protocol = PRONTO;}
+    // else if (msg.protocol == 14){ protocol = PIONEER;}
     //decode_type_t protocol = (msg.protocol==1) ? LG2:KELON;
-    ac.next.protocol = protocol;
+    //ac.next.protocol = protocol;
+
+    ac.next.protocol = static_cast<decode_type_t>(msg.protocol);
 
     // // power on/off
     bool power_state;

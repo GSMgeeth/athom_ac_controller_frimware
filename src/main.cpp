@@ -40,10 +40,27 @@
 #include <IRrecv.h>
 #include <IRsend.h>
 #include <IRutils.h>
+#include <assert.h>
+#include <IRac.h>
+#include <IRtext.h>
 
 const uint16_t ir_led = 4;
 IRsend irsend(ir_led);
-const int RECV_PIN = 5;
+const int kRecvPin = 5;
+const int buttonPin = 0; // Push button connected to digital pin 2
+const uint16_t kCaptureBufferSize = 400;
+#if DECODE_AC
+// Some A/C units have gaps in their protocols of ~40ms. e.g. Kelvinator
+// A value this large may swallow repeats of some protocols
+const uint8_t kTimeout = 50;
+#else  // DECODE_AC
+// Suits most messages, while not swallowing many repeats.
+const uint8_t kTimeout = 15;
+#endif // DECODE_AC
+const uint16_t kMinUnknownSize = 12;
+const uint8_t kTolerancePercentage = kTolerance; // kTolerance is normally 25%
+#define LEGACY_TIMING_INFO false
+
 // const uint16_t led = 13;
 
 // const char* ssid = "chathushka";
@@ -65,14 +82,28 @@ String firmwareURL = "";
 ESP8266WebServer server(80);
 ESP8266WebServer serverOTA(80);
 unsigned long lastSerialReadTime = 0;
-IRrecv irrecv(RECV_PIN);
-decode_results results;
+IRrecv irrecv(kRecvPin, kCaptureBufferSize, kTimeout, true);
+// IRrecv irrecv(kRecvPin);
+
+decode_results results; // Somewhere to store the results
 bool is_protocol_set = false;
+// Variables to hold button state
+int buttonState = 0;
+int lastButtonState = 0;
+
+// Variables for timing the long press
+unsigned long lastDebounceTime = 0;
+unsigned long longPressInterval = 2000; // Adjust this value for long press duration
+
+// volatile bool buttonPressed = false; // Flag for button press
+// unsigned long pressStartTime = 0;
+// unsigned long longPressInterval = 2000; // 2 seconds for a long press
 
 int prot_address = 0;
 int temp_address = 20;
 int fanspeed_address = 22;
-int PROTOCOL = 2;
+int PROTOCOL = -1;
+int PROTOCOL_RECV = -1;
 int POWER = 2;
 int FAN_SPEED = 3;
 int MODE = 1;
@@ -91,13 +122,6 @@ int TEMPERATURE = 22;
 
 #define INCOMING_DATA_BUFFER_SIZE 256
 static char incoming_data[INCOMING_DATA_BUFFER_SIZE];
-
-// Translate iot_configs.h defines into variables used by the sample
-// static const char* ssid = IOT_CONFIG_WIFI_SSID;
-// static const char* password = IOT_CONFIG_WIFI_PASSWORD;
-// static const char* host = IOT_CONFIG_IOTHUB_FQDN;
-// static const char* device_id = IOT_CONFIG_DEVICE_ID;
-// static const char* device_key = IOT_CONFIG_DEVICE_KEY;
 static const int port = 8883;
 
 // Memory allocated for the sample's variables and structures.
@@ -109,27 +133,27 @@ static char sas_token[200];
 static uint8_t signature[512];
 static unsigned char encrypted_signature[32];
 static char base64_decoded_device_key[32];
-// static unsigned long next_telemetry_send_time_ms = 0;
-//  static char telemetry_topic[128];
-//  static uint8_t telemetry_payload[100];
-//  static uint32_t telemetry_send_count = 0;
 
 // function definitions
 static void initializeClients();
 void readStringFromEEPROM(int startAddress, char *buffer);
 void writeStringToEEPROM(int startAddress, const char *string);
 void saveDataToEEPROM();
+void saveProtocol();
 void loadDataFromEEPROM();
 void handleRoot();
 void handleSubmit();
 void handleCm();
+void handleStatus();
+void handleTestIR();
+void handleIP();
 void loadCredentials();
 void loadMqqtParams();
 bool connectToWiFi();
 void startAPServer();
 void startServerOTA();
-void saveCredentials(String ssid, String password);
-void saveMqttParams(String MqttHost, String MqttClient, String MqttPassword);
+void saveCredentials(String ssid = "", String password = "");
+void saveMqttParams(String MqttHost = "", String MqttClient = "", String MqttPassword = "");
 void saveURL(String URL, String updateStarted);
 String NetworkUniqueId(void);
 uint32_t ESP_getChipId(void);
@@ -137,21 +161,110 @@ void handleGetFirmwareURL();
 void updateFirmware(String url);
 void setOTA();
 void recieveProtocol();
-
+void recieveProtocolWithTimer();
+void handleLongPress();
+// void IRAM_ATTR handleButtonPress();
+void clearEEPROM();
 // Auxiliary functions
+
+void clearEEPROM()
+{
+  EEPROM.begin(512); // Adjust size if needed
+
+  // Clear EEPROM
+  for (int i = 0; i < 512; i++)
+  {
+    EEPROM.write(i, 0);
+  }
+  EEPROM.commit();
+
+  Serial.println("EEPROM cleared. Restarting...");
+}
+
+// void IRAM_ATTR handleButtonPress()
+// {
+//   if (digitalRead(buttonPin) == LOW)
+//   {
+//     buttonPressed = true;
+//     pressStartTime = millis();
+//   }
+// }
+
+void handleLongPress()
+{
+  Serial.println("Long press detected. Erasing EEPROM and resetting ESP8266...");
+  // Erase EEPROM - Replace with your EEPROM library's function
+  // Reset ESP8266
+  saveCredentials();
+  saveMqttParams();
+  clearEEPROM();
+  ESP.restart();
+}
+void recieveProtocolWithTimer()
+{
+  // variables to create timer for recieving protocol
+  const unsigned long interval = 60000; // 1 minute in milliseconds
+  unsigned long previousMillis = millis();
+  Serial.println("Waiting for IR code...");
+  while (millis() - previousMillis <= interval)
+  {
+    if (irrecv.decode(&results))
+    {
+      // Display the tolerance percentage if it has been change from the default.
+      if (kTolerancePercentage != kTolerance)
+        Serial.printf(D_STR_TOLERANCE " : %d%%\n", kTolerancePercentage);
+      // Display the basic output of what we found.
+      Serial.print(resultToHumanReadableBasic(&results));
+      Serial.println();
+      Serial.print("Decoded PROTOCOL in int: ");
+      PROTOCOL = static_cast<int>(results.decode_type);
+      Serial.println(PROTOCOL);
+
+      yield(); // Feed the WDT as the text output can take a while to print.
+#if LEGACY_TIMING_INFO
+      // Output legacy RAW timing info of the result.
+      Serial.println(resultToTimingInfo(&results));
+      yield(); // Feed the WDT (again)
+#endif         // LEGACY_TIMING_INFO
+      // Output the results as source code
+      yield(); // Feed the WDT (again)
+      irrecv.resume();
+      return;
+    }
+    yield(); // Feed the WDT (again)
+  }
+  irrecv.resume();
+  Serial.println("Timeout: No IR command received within 1 minute.");
+}
+
 void recieveProtocol()
 {
-  String prot;
+  // Serial.println("Waiting for IR code...");
   if (irrecv.decode(&results))
   {
-    Serial.println("Received IR Code:");
-    Serial.println(static_cast<unsigned long>(results.value), HEX);
-    unsigned long decoded_protocol = static_cast<unsigned long>(results.decode_type);
-    // String decoded_protocol = String(decoded_protocol);
-    if (decoded_protocol = 4)
-      prot = SONY;
-    else if (decoded_protocol = 5)
-      prot = PANASONIC;
+    // Display the tolerance percentage if it has been change from the default.
+    if (kTolerancePercentage != kTolerance)
+      Serial.printf(D_STR_TOLERANCE " : %d%%\n", kTolerancePercentage);
+    // Display the basic output of what we found.
+    Serial.print(resultToHumanReadableBasic(&results));
+    Serial.println();
+    Serial.print("Decoded PROTOCOL in int: ");
+    Serial.println(PROTOCOL_RECV);
+    int recieved_prot = static_cast<int>(results.decode_type);
+    if (recieved_prot != -1){
+      PROTOCOL_RECV = recieved_prot;
+    }
+    
+
+    yield(); // Feed the WDT as the text output can take a while to print.
+#if LEGACY_TIMING_INFO
+    // Output legacy RAW timing info of the result.
+    Serial.println(resultToTimingInfo(&results));
+    yield(); // Feed the WDT (again)
+#endif       // LEGACY_TIMING_INFO
+    // Output the results as source code
+    yield(); // Feed the WDT (again)
+    irrecv.resume();
   }
 }
 
@@ -292,22 +405,211 @@ void generateWifiHost()
   char chipId[30];
   // std::string chipId = std::to_string(ESP_getChipId() & 0x1FFF);
   sprintf(chipId, "%u", ESP_getChipId() & 0x1FFF);
-  hostname = hostnameBase + hipen + networkId + hipen + chipId + "q";
+  hostname = hostnameBase + hipen + networkId + hipen + chipId;
   ssid = hostname;
 }
 
-void handleRoot()
-{
-  String html = "<html><body>";
-  html += "<h1>ESP8266 WiFi Configuration</h1>";
-  html += "<form action='/submit' method='post'>";
-  html += "SSID: <input type='text' name='ssid'><br>";
-  html += "Password: <input type='password' name='password'><br>";
-  html += "<input type='submit' value='Submit'>";
-  html += "</form>";
-  html += "</body></html>";
+const char chunk1[] PROGMEM =R"(<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP8266 Configuration</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f4f4f9;
+    }
+    .container {
+      width: 90%;
+      max-width: 400px;
+      padding: 20px;
+      border-radius: 8px;
+      background-color: #ffffff;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+    h2 {
+      text-align: center;
+      color: #333;
+    }
+    label {
+      font-size: 0.9rem;
+      color: #555;
+    }
+    input[type="text"], input[type="password"], select {
+      width: 100%;
+      padding: 8px;
+      margin: 8px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 4px;
+      color: white;
+      background-color: #4CAF50;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    .section {
+      margin-top: 20px;
+    }
+    .status {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 0.9rem;
+      color: #666;
+    }
+  </style>
+</head>)";
 
-  server.send(200, "text/html", html);
+const char chunk2[] PROGMEM =R"rawliteral(<body>
+<div class="container">
+  <h2>ESP8266 Configuration</h2>
+  <form id="config-form" onsubmit="return saveConfig()">
+    <label for="mqtt-host">MQTT Host</label>
+    <input type="text" id="mqtt-host" name="mqttHost" required>
+
+    <label for="mqtt-user">MQTT User</label>
+    <input type="text" id="mqtt-user" name="mqttUser" required>
+
+    <label for="mqtt-password">MQTT Password</label>
+    <input type="password" id="mqtt-password" name="mqttPassword" required>
+
+    <label for="mqtt-topic">MQTT Topic</label>
+    <input type="text" id="mqtt-topic" name="mqttTopic" required>
+
+    <label for="mqtt-fulltopic">MQTT Full Topic</label>
+    <input type="text" id="mqtt-fulltopic" name="mqttFullTopic" required>
+
+    <label for="ssid">SSID</label>
+    <input type="text" id="ssid" name="ssid" required>
+
+    <label for="wifi-password">WiFi Password</label>
+    <input type="password" id="wifi-password" name="wifiPassword" required>
+
+    <label for="protocol">Protocol</label>
+    <select id="protocol" name="protocol" required>
+      
+    </select>
+
+    <button type="submit">Save Configuration</button>
+  </form>
+
+
+  <div class="section">
+    <h3>IR Control</h3>
+    <div class="status" id="ir-detected">Detected Protocol: <span id="detected-protocol">None</span></div>
+ <label for="test-protocol">Select Protocol:</label>
+ <select id="test-protocol" name="protocol" required>
+ </select>
+    <button onclick="sendTestCommand()">Send Test IR Command</button>
+  </div>
+
+  <div class="status" id="status-message"></div>
+</div>)rawliteral";
+
+const char chunk3[] PROGMEM =R"rawliteral(
+<script>
+
+  const protocols = "UNKNOWN,UNUSED,RC5,RC6,NEC,SONY,PANASONIC,JVC,SAMSUNG,WHYNTER,AIWA_RC_T501,LG,SANYO,MITSUBISHI,DISH,SHARP,COOLIX,DAIKIN,DENON,KELVINATOR,SHERWOOD,MITSUBISHI_AC,RCMM,SANYO_LC7461,RC5X,GREE,PRONTO,NEC_LIKE,ARGO,TROTEC,NIKAI,RAW,GLOBALCACHE,TOSHIBA_AC,FUJITSU_AC,MIDEA,MAGIQUEST,LASERTAG,CARRIER_AC,HAIER_AC,MITSUBISHI2,HITACHI_AC,HITACHI_AC1,HITACHI_AC2,GICABLE,HAIER_AC_YRW02,WHIRLPOOL_AC,SAMSUNG_AC,LUTRON,ELECTRA_AC,PANASONIC_AC,PIONEER,LG2,MWM,DAIKIN2,VESTEL_AC,TECO,SAMSUNG36,TCL112AC,LEGOPF,MITSUBISHI_HEAVY_88,MITSUBISHI_HEAVY_152,DAIKIN216,SHARP_AC,GOODWEATHER,INAX,DAIKIN160,NEOCLIMA,DAIKIN176,DAIKIN128,AMCOR,DAIKIN152,MITSUBISHI136,MITSUBISHI112,HITACHI_AC424,SONY_38K,EPSON,SYMPHONY,HITACHI_AC3,DAIKIN64,AIRWELL,DELONGHI_AC,DOSHISHA,MULTIBRACKETS,CARRIER_AC40,CARRIER_AC64,HITACHI_AC344,CORONA_AC,MIDEA24,ZEPEAL,SANYO_AC,VOLTAS,METZ,TRANSCOLD,TECHNIBEL_AC,MIRAGE,ELITESCREENS,PANASONIC_AC32,MILESTAG2,ECOCLIM,XMP,TRUMA,HAIER_AC176,TEKNOPOINT,KELON,TROTEC_3550,SANYO_AC88,BOSE,ARRIS,RHOSS,AIRTON,COOLIX48,HITACHI_AC264,KELON168,HITACHI_AC296,DAIKIN200,HAIER_AC160,CARRIER_AC128,TOTO,CLIMABUTLER,TCL96AC,BOSCH144,SANYO_AC152,DAIKIN312,GORENJE,WOWWEE,CARRIER_AC84,YORK";
+
+  const protocolArray = protocols.split(",");
+
+ 
+  const selectElement = document.getElementById("protocol");
+  const selectElement1 = document.getElementById("test-protocol");
+
+
+  protocolArray.forEach((protocol, index) => {
+    const option = document.createElement("option");
+    option.value = index - 1; 
+    option.textContent = protocol;
+    const option1 = document.createElement("option");
+    option1.value = index - 1; 
+    option1.textContent = protocol;
+    selectElement.appendChild(option);
+    selectElement1.appendChild(option1)
+  });
+  function saveConfig() {
+    const mqttHost = document.getElementById('mqtt-host').value;
+    const mqttUser = document.getElementById('mqtt-user').value;
+    const mqttPassword = document.getElementById('mqtt-password').value;
+    const mqttTopic = document.getElementById('mqtt-topic').value;
+    const mqttFullTopic = document.getElementById('mqtt-fulltopic').value;
+    const ssid = document.getElementById('ssid').value;
+    const wifiPassword = document.getElementById('wifi-password').value;
+    const protocol = document.getElementById('protocol').value;
+    const url = `http://192.168.4.1/cm?user=admin&cmnd=${encodeURIComponent(`Backlog MqttHost ${mqttHost}; MqttUser ${mqttUser}; MqttClient ${mqttUser}; MqttPassword ${mqttPassword}; Topic ${mqttTopic}; FullTopic ${mqttFullTopic}; SSID1 ${ssid}; Password1 ${wifiPassword}; Protocol ${protocol};`)}`
+    fetch(url)
+      .then(response => {
+        if (response.ok) {
+          document.getElementById('status-message').innerText = 'Configuration Saved!';
+        } else {
+          document.getElementById('status-message').innerText = 'Failed to Save Configuration.';
+        }
+      })
+      .catch(error => {
+        document.getElementById('status-message').innerText = 'Error saving configuration.';
+        console.error('Error:', error);
+      });
+    return false;
+  }
+)rawliteral";
+const char chunk4[] PROGMEM =R"rawliteral(
+  function sendTestCommand() {
+    const protocol = document.getElementById('test-protocol').value;
+    const url = `http://192.168.4.1/testIR?command=protocol%20${protocol}%3B%20power%201%3B%20temp%2021%3B%20fan_speed%202%3B`;
+    fetch(url)
+      .then(response => {
+        if (response.ok) {
+          document.getElementById('status-message').innerText = 'Test IR Command Sent!';
+        } else {
+          document.getElementById('status-message').innerText = 'Failed to Send Test IR Command.';
+        }
+      })
+      .catch(error => {
+        document.getElementById('status-message').innerText = 'Error sending test IR command.';
+        console.error('Error:', error);
+      });
+  }
+
+  function fetchStatus() {
+    fetch('http://192.168.4.1/status')
+      .then(response => response.json())
+      .then(data => {
+
+        document.getElementById('detected-protocol').innerText = protocolArray[parseInt(data.detectedProtocol)+1] || 'None';
+      })
+      .catch(error => {
+        console.error('Error fetching status:', error);
+      });
+  }
+
+  setInterval(fetchStatus, 5000); 
+</script>
+</body>
+</html>
+)rawliteral";
+void handleRoot() {
+    server.setContentLength(CONTENT_LENGTH_UNKNOWN);  // Set to unknown to enable chunked transfer
+    server.send(200, "text/html", "");  // Start response
+    // Sending each part of the HTML page
+      server.sendContent_P(chunk1);
+      server.sendContent_P(chunk2);
+      server.sendContent_P(chunk3);
+     server.sendContent_P(chunk4);
+    server.sendContent("");  // End of chunked response
 }
 void startAPServer()
 {
@@ -315,13 +617,23 @@ void startAPServer()
   // Set up AP (Access Point)
   WiFi.softAP(ssid);
   Serial.println("AP Started. Connect to network: " + String(ssid));
-
+    if (!LittleFS.begin()) {
+        Serial.println("An error has occurred while mounting LittleFS");
+        return;
+    }
   // Handle root URL ("/")
   server.on("/", HTTP_GET, handleRoot);
 
   // Handle form submission
   server.on("/submit", HTTP_POST, handleSubmit);
+  // Handle configuration data (wifi credentials, mqtt credentials and protocol)
   server.on("/cm", HTTP_GET, handleCm);
+  // Endpoint to send device state
+  server.on("/status", HTTP_GET, handleStatus);
+  // Endpoint to handle testing ir commands
+  server.on("/testIR", HTTP_GET, handleTestIR);
+  // Endpoit to send ip address to be connected on router endpoint
+  server.on("/ip", HTTP_GET, handleIP);
   server.begin();
   // delay(2000);
   // WiFi.softAPdisconnect(true);
@@ -341,7 +653,7 @@ void handleCm()
   int startPos = cmString.indexOf(" ") + 1; // Skip space
 
   // Split the substring starting from startPos by commas
-  String parts[8]; // Assuming there are 8 parts separated by commas
+  String parts[9]; // Assuming there are 8 parts separated by commas
   int count = 0;
   for (int i = startPos; i < cmString.length(); i++)
   {
@@ -363,6 +675,7 @@ void handleCm()
   String FullTopic = parts[5].substring(parts[5].indexOf(" ") + 1);
   String SSID1 = parts[6].substring(parts[6].indexOf(" ") + 1);
   String Password1 = parts[7].substring(parts[7].indexOf(" ") + 1);
+  String Protocol = parts[8].substring(parts[8].indexOf(" ") + 1);
 
   // Print the values to Serial
   Serial.println("MqttHost: " + MqttHost);
@@ -373,14 +686,101 @@ void handleCm()
   Serial.println("FullTopic: " + FullTopic);
   Serial.println("SSID1: " + SSID1);
   Serial.println("Password1: " + Password1);
+  Serial.println("Protocol: " + Protocol);
 
   saveCredentials(SSID1, Password1);
   saveMqttParams(MqttHost, MqttClient, MqttPassword);
+  PROTOCOL = Protocol.toInt();
+  saveProtocol();
   server.send(200, "text/html", "Configuration saved. Restarting...");
+  delay(500);
   WiFi.softAPdisconnect(true);
   Serial.println("Access Point ended.");
-  delay(2000);
+  delay(100);
   ESP.restart();
+}
+
+void handleStatus()
+{
+  Serial.println("Received request for /status");
+  // recieveProtocol();
+  StaticJsonDocument<200> jsonDoc;
+  jsonDoc["detectedProtocol"] = PROTOCOL_RECV;
+  jsonDoc["uptime"] = millis() / 1000;
+  jsonDoc["signalStrength"] = WiFi.RSSI();
+
+  String jsonResponse;
+  serializeJson(jsonDoc, jsonResponse);
+
+  server.send(200, "application/json", jsonResponse);
+  Serial.println("Response sent for /status");
+}
+
+void handleTestIR()
+{
+  Serial.println("Recieved request for /test");
+  // Get the command parameter from the URL
+  String command = server.arg("command");
+
+  // Initialize variables to hold the extracted values
+  int protocol = -1;
+  int power = -1;
+  int temp = -1;
+  int fan_speed = -1;
+
+  // Split the command by ';' to separate key-value pairs
+  int startPos = 0;
+  String parts[4]; // Assuming there are 4 parts separated by commas
+  int count = 0;
+  for (int i = startPos; i < command.length(); i++)
+  {
+    if (command.charAt(i) == ';')
+    {
+      parts[count++] = command.substring(startPos, i);
+      startPos = i + 2; // Skip the semicolon and space and move to next part
+    }
+  }
+  // Last part (no semicolon at the end)
+  parts[count++] = command.substring(startPos);
+
+  // Assign each part to separate variables
+  protocol = parts[0].substring(parts[0].indexOf(" ") + 1).toInt();
+  power = parts[1].substring(parts[1].indexOf(" ") + 1).toInt();
+  temp = parts[2].substring(parts[2].indexOf(" ") + 1).toInt();
+  fan_speed = parts[3].substring(parts[3].indexOf(" ") + 1).toInt();
+  // Print results to Serial Monitor
+  Serial.print("Protocol: ");
+  Serial.println(protocol);
+  Serial.print("Power: ");
+  Serial.println(power);
+  Serial.print("Temperature: ");
+  Serial.println(temp);
+  Serial.print("Fan Speed: ");
+  Serial.println(fan_speed);
+
+  ir_msg msg;
+  msg.protocol = protocol;
+  msg.power = power;
+  msg.fan_speed = fan_speed;
+  msg.mode = MODE;
+  msg.temp = temp;
+  // sending ir command
+  send_ir(msg, ir_led);
+  // Serial.println("ir command sent");
+
+  // Send response back to client
+  String response = "IR command sent";
+  server.send(200, "text/plain", response);
+}
+
+void handleIP()
+{
+  String ip = WiFi.localIP().toString();
+  StaticJsonDocument<200> jsonDoc;
+  jsonDoc["IP"] = ip;
+  String jsonResponse;
+  serializeJson(jsonDoc, jsonResponse);
+  server.send(200, "application/json", jsonResponse);
 }
 
 void handleSubmit()
@@ -471,6 +871,7 @@ void loadCredentials()
   String ssidRes = file.readStringUntil('\n');
   String passwordRes = file.readStringUntil('\n');
   ssidRes.trim();
+
   passwordRes.trim();
   wifiSsid = ssidRes;
   wifiPw = passwordRes;
@@ -525,8 +926,13 @@ bool connectToWiFi()
 
   // Wait until connected or timeout (10 seconds)
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30)
+  while (WiFi.status() != WL_CONNECTED && attempts < 10)
   {
+    int reading = digitalRead(buttonPin);
+    if (reading == LOW)
+    {
+      return false;
+    }
     delay(1000);
     Serial.print(".");
     attempts++;
@@ -592,6 +998,15 @@ void saveDataToEEPROM()
   EEPROM.write(temp_address, TEMPERATURE);
   EEPROM.write(fanspeed_address, FAN_SPEED);
   EEPROM.end();
+}
+
+void saveProtocol()
+{
+  EEPROM.begin(512);
+  EEPROM.write(prot_address, PROTOCOL);
+  EEPROM.end();
+  Serial.print("Saving protocol: ");
+  Serial.println(PROTOCOL);
 }
 
 void loadDataFromEEPROM()
@@ -783,7 +1198,8 @@ void receivedCallback(char *topic, byte *payload, unsigned int length)
   }
   else
   {
-    if (PROTOCOL == 2)
+    // Handling kelon protocol for hisene ac; This protocol was not properly implemented in IRremoteESP8266.h//
+    if (PROTOCOL == 103 || PROTOCOL == 112)
     {
       decode_results results;
       const uint16_t kKelonHdrMark = 9000;
@@ -1000,70 +1416,67 @@ void receivedCallback(char *topic, byte *payload, unsigned int length)
   }
   if (method == "protocol")
   {
-    const char *protocol = doc["protocol"];
-    if (strcmp(protocol, "LG2") == 0)
-    {
-      PROTOCOL = 1;
-    }
-    else if (strcmp(protocol, "KELON") == 0)
-    {
-      PROTOCOL = 2;
-    }
-    else if (strcmp(protocol, "COOLIX") == 0)
-    {
-      PROTOCOL = 3;
-    }
-    else if (strcmp(protocol, "SONY") == 0)
-    {
-      PROTOCOL = 4;
-    }
-    else if (strcmp(protocol, "DAIKIN") == 0)
-    {
-      PROTOCOL = 5;
-    }
-    else if (strcmp(protocol, "HAIER_AC") == 0)
-    {
-      PROTOCOL = 6;
-    }
-    else if (strcmp(protocol, "WHIRLPOOL_AC") == 0)
-    {
-      PROTOCOL = 7;
-    }
-    else if (strcmp(protocol, "TEKNOPOINT") == 0)
-    {
-      PROTOCOL = 8;
-    }
-    else if (strcmp(protocol, "GREE") == 0)
-    {
-      PROTOCOL = 9;
-    }
-    else if (strcmp(protocol, "TCL112AC") == 0)
-    {
-      PROTOCOL = 10;
-    }
-    else if (strcmp(protocol, "TCL96AC") == 0)
-    {
-      PROTOCOL = 11;
-    }
-    else if (strcmp(protocol, "SAMSUNG") == 0)
-    {
-      PROTOCOL = 12;
-    }
-    else if (strcmp(protocol, "PRONTO") == 0)
-    {
-      PROTOCOL = 13;
-    }
-    else if (strcmp(protocol, "PIONEER") == 0)
-    {
-      PROTOCOL = 14;
-    }
+    PROTOCOL = doc["protocol"];
+    // const char *protocol = doc["protocol"];
+    //  if (strcmp(protocol, "LG2") == 0)
+    //  {
+    //    PROTOCOL = 1;
+    //  }
+    //  else if (strcmp(protocol, "KELON") == 0)
+    //  {
+    //    PROTOCOL = 2;
+    //  }
+    //  else if (strcmp(protocol, "COOLIX") == 0)
+    //  {
+    //    PROTOCOL = 3;
+    //  }
+    //  else if (strcmp(protocol, "SONY") == 0)
+    //  {
+    //    PROTOCOL = 4;
+    //  }
+    //  else if (strcmp(protocol, "DAIKIN") == 0)
+    //  {
+    //    PROTOCOL = 5;
+    //  }
+    //  else if (strcmp(protocol, "HAIER_AC") == 0)
+    //  {
+    //    PROTOCOL = 6;
+    //  }
+    //  else if (strcmp(protocol, "WHIRLPOOL_AC") == 0)
+    //  {
+    //    PROTOCOL = 7;
+    //  }
+    //  else if (strcmp(protocol, "TEKNOPOINT") == 0)
+    //  {
+    //    PROTOCOL = 8;
+    //  }
+    //  else if (strcmp(protocol, "GREE") == 0)
+    //  {
+    //    PROTOCOL = 9;
+    //  }
+    //  else if (strcmp(protocol, "TCL112AC") == 0)
+    //  {
+    //    PROTOCOL = 10;
+    //  }
+    //  else if (strcmp(protocol, "TCL96AC") == 0)
+    //  {
+    //    PROTOCOL = 11;
+    //  }
+    //  else if (strcmp(protocol, "SAMSUNG") == 0)
+    //  {
+    //    PROTOCOL = 12;
+    //  }
+    //  else if (strcmp(protocol, "PRONTO") == 0)
+    //  {
+    //    PROTOCOL = 13;
+    //  }
+    //  else if (strcmp(protocol, "PIONEER") == 0)
+    //  {
+    //    PROTOCOL = 14;
+    //  }
 
     // writeStringToEEPROM(prot_address, PROTOCOL);
-    EEPROM.begin(512);
-    EEPROM.write(prot_address, PROTOCOL);
-    EEPROM.end();
-    Serial.print("Saving protocol: ");
-    Serial.println(PROTOCOL);
+    saveProtocol();
   }
 
   //   else if(method == "raw"){
@@ -1289,10 +1702,10 @@ static int connectToAzureIoTHub()
 static void establishConnection()
 {
   generateWifiHost();
-  Serial.println("Starting Test...");
+  Serial.println("Launcing ac controller...");
   loadCredentials();
   loadMqqtParams();
-  if (wifiSsid == "")
+  if (wifiSsid == "") /////////////////////////change for testing purposes////////////////// original =  if (wifiSsid == "")//////////////////////////
   {
     startAPServer();
   }
@@ -1300,17 +1713,20 @@ static void establishConnection()
   {
     WiFi.mode(WIFI_STA);
     isWifiConnected = connectToWiFi();
-    delay(5000);
-    if (!isWifiConnected)
+
+    // delay(5000);
+    //  if (!isWifiConnected)
+    //  {
+    //    Serial.print("isWifiConnected = ");
+    //    Serial.println(isWifiConnected);
+    //    delay(30000);
+    //    ESP.restart();
+    //  }
+    //  else
+    //  {
+    //  connectToWiFi();
+    if (isWifiConnected)
     {
-      Serial.print("isWifiConnected = ");
-      Serial.println(isWifiConnected);
-      delay(30000);
-      ESP.restart();
-    }
-    else
-    {
-      // connectToWiFi();
       setOTA();
       startServerOTA();
       initializeTime();
@@ -1330,9 +1746,10 @@ static void establishConnection()
       {
         connectToAzureIoTHub();
       }
-
-      // digitalWrite(LED_PIN, LOW);
     }
+
+    // digitalWrite(LED_PIN, LOW);
+    // }
   }
 }
 
@@ -1349,34 +1766,101 @@ static void establishConnection()
 
 void setup()
 {
-  Serial.begin(115200);
+  Serial.begin(115200,SERIAL_8N1, SERIAL_TX_ONLY);
   pinMode(LED_PIN, OUTPUT);
+  // pinMode(buttonPin, INPUT);
+  pinMode(buttonPin, INPUT_PULLUP);
+  // attachInterrupt(digitalPinToInterrupt(buttonPin), handleButtonPress, FALLING);
+
   digitalWrite(LED_PIN, LOW);
+#if DECODE_HASH
+  // Ignore messages with less than minimum on or off pulses.
+  irrecv.setUnknownThreshold(kMinUnknownSize);
+#endif                                       // DECODE_HASH
+  irrecv.setTolerance(kTolerancePercentage); // Override the default tolerance.
+  irrecv.enableIRIn();                       // Start the receiver
   // initializeWifi();
   establishConnection();
 }
 
 void loop()
 {
+  // ir_msg msg;
+  // // TEMPERATURE = doc["temp"];
+  // msg.protocol = PROTOCOL;
+  // msg.power = 1;
+  // msg.fan_speed = FAN_SPEED;
+  // msg.mode = MODE;
+  // msg.temp = TEMPERATURE;
+  // // sending ir command
+  // send_ir(msg, ir_led);
+  // delay(1000);
+  // // Serial.println("ir command sent");
 
   if (apStarted)
   {
+    recieveProtocol();
     server.handleClient();
   }
 
-  if ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected())
+  //////////////////////Handle reset with long press////////////////////////////////////////////////////////////////////////////////////
+  int reading = digitalRead(buttonPin);
+
+  // Check if the button state has changed
+  if (reading != lastButtonState)
+  {
+    lastDebounceTime = millis(); // Reset the debounce timer
+  }
+
+  // Check for long press
+  if ((millis() - lastDebounceTime) > longPressInterval)
+  {
+    if (reading == LOW)
+    {
+      handleLongPress(); // Call function to handle long press
+    }
+  }
+  // Save the current button state for the next loop iteration
+  lastButtonState = reading;
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // if ((wifiSsid != "") && ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected()))
+  if ((wifiSsid != "") && (WiFi.status() != WL_CONNECTED))
   {
     Serial.println("Wifi not connected");
     digitalWrite(LED_PIN, LOW);
     establishConnection();
-    delay(2000);
+    delay(500);
   }
+  // int attempts = 0;
+  //  while (WiFi.status() != WL_CONNECTED && attempts < 10)
+  //  {
+  //    delay(1000);
+  //    Serial.print(".");
+  //    attempts++;
+  //  }
+
   else
   {
-
     ArduinoOTA.handle();
     mqtt_client.loop();
     serverOTA.handleClient();
     delay(500);
   }
+
+  // if (buttonPressed)
+  // {
+  //   unsigned long currentPressTime = millis();
+
+  //   // Check if button has been held down for long press interval
+  //   if (currentPressTime - pressStartTime >= longPressInterval)
+  //   {
+  //     Serial.println("Long press detected. Formatting LittleFS and resetting...");
+  //     LittleFS.format();
+  //     ESP.restart();
+  //   }
+
+  //   // Reset the flag after handling
+  //   buttonPressed = false;
+  // }
 }
