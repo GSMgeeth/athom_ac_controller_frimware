@@ -151,6 +151,7 @@ void handleCm();
 void handleStatus();
 void handleTestIR();
 void handleIP();
+void handleConfigs();
 void loadCredentials();
 void loadMqqtParams();
 bool connectToWiFi();
@@ -411,6 +412,7 @@ void generateWifiHost()
   sprintf(chipId, "%u", ESP_getChipId() & 0x1FFF);
   hostname = hostnameBase + hipen + networkId + hipen + chipId;
   ssid = hostname;
+  device_id = hostname;
 }
 
 const char chunk1[] PROGMEM = R"(<!DOCTYPE html>
@@ -640,6 +642,9 @@ void startAPServer()
   server.on("/testIR", HTTP_GET, handleTestIR);
   // Endpoit to send ip address to be connected on router endpoint
   server.on("/ip", HTTP_GET, handleIP);
+  // Endpoint to send configured device settings
+  server.on("/configs", HTTP_GET, handleConfigs);
+
   server.begin();
   // delay(2000);
   // WiFi.softAPdisconnect(true);
@@ -650,6 +655,24 @@ void startServerOTA()
 {
   serverOTA.on("/firmware_url", HTTP_GET, handleGetFirmwareURL);
   serverOTA.begin();
+}
+
+void handleConfigs()
+{
+  Serial.println("Received request for /configs");
+  StaticJsonDocument<200> jsonDoc;
+  jsonDoc["MqttHost"] = host;
+  jsonDoc["MqttClient"] = hostname;
+  jsonDoc["MqttPassword"] = device_key;
+  jsonDoc["SSID1"] = wifiSsid;
+  jsonDoc["Password1"] = wifiPw;
+  jsonDoc["Protocol"] = PROTOCOL;
+
+  String jsonResponse;
+  serializeJson(jsonDoc, jsonResponse);
+
+  server.send(200, "application/json", jsonResponse);
+  Serial.println("Response sent for /configs");
 }
 
 void handleCm()
@@ -917,6 +940,10 @@ void loadMqqtParams()
   //////////////////////Setting mqtt parameters
   host = MqttHost;
   device_id = MqttClient;
+  if (MqttClient != ""){
+  hostname = MqttClient;
+  }
+
   device_key = MqttPassword;
   Serial.print("loading mqtt host; ");
   Serial.println(host);
@@ -1859,7 +1886,7 @@ void loop()
     {
       WiFi.softAPdisconnect(true);
       Serial.println("Access Point ended.");
-      //WiFi.mode(WIFI_STA);
+      // WiFi.mode(WIFI_STA);
       flag = false;  // Reset the flag
       startTime = 0; // Reset startTime for the next time flag is true
       ESP.restart();
