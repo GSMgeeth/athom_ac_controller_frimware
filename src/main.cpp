@@ -156,6 +156,7 @@ void loadCredentials();
 void loadMqqtParams();
 bool connectToWiFi();
 void startAPServer();
+void startServer();
 void startServerOTA();
 void saveCredentials(String ssid = "", String password = "");
 void saveMqttParams(String MqttHost = "", String MqttClient = "", String MqttPassword = "");
@@ -620,7 +621,7 @@ void handleRoot()
 }
 void startAPServer()
 {
-  apStarted = true;
+  apStarted = true; 
   // Set up AP (Access Point)
   WiFi.softAP(ssid);
   Serial.println("AP Started. Connect to network: " + String(ssid));
@@ -651,11 +652,41 @@ void startAPServer()
   // Serial.println("Access Point ended.");
 }
 
+void startServer()
+{
+ 
+  if (!LittleFS.begin())
+  {
+    Serial.println("An error has occurred while mounting LittleFS");
+    return;
+  }
+  // Handle root URL ("/")
+  server.on("/", HTTP_GET, handleRoot);
+
+  // Handle form submission
+  server.on("/submit", HTTP_POST, handleSubmit);
+  // Handle configuration data (wifi credentials, mqtt credentials and protocol)
+  server.on("/cm", HTTP_GET, handleCm);
+  // Endpoint to send device state
+  server.on("/status", HTTP_GET, handleStatus);
+  // Endpoint to handle testing ir commands
+  server.on("/testIR", HTTP_GET, handleTestIR);
+  // Endpoit to send ip address to be connected on router endpoint
+  server.on("/ip", HTTP_GET, handleIP);
+  // Endpoint to send configured device settings
+  server.on("/configs", HTTP_GET, handleConfigs);
+
+  server.begin();
+  // delay(2000);
+  // WiFi.softAPdisconnect(true);
+  // Serial.println("Access Point ended.");
+}
 void startServerOTA()
 {
   serverOTA.on("/firmware_url", HTTP_GET, handleGetFirmwareURL);
   serverOTA.begin();
 }
+
 
 void handleConfigs()
 {
@@ -1757,7 +1788,7 @@ static void establishConnection()
     {
       WiFi.mode(WIFI_STA);
     }
-
+    startServer();
     isWifiConnected = connectToWiFi();
 
     // delay(5000);
@@ -1847,9 +1878,9 @@ void loop()
   if (apStarted)
   {
     recieveProtocol();
-    server.handleClient();
+    
   }
-
+  server.handleClient();
   //////////////////////Handle reset with long press////////////////////////////////////////////////////////////////////////////////////
   int reading = digitalRead(buttonPin);
 
