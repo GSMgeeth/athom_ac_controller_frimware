@@ -429,13 +429,14 @@ const char chunk1[] PROGMEM = R"(<!DOCTYPE html>
       padding: 0;
       display: flex;
       justify-content: center;
-      align-items: center;
-      height: 100vh;
+      align-items: flex-start;
+      min-height: 100vh;
       background-color: #f4f4f9;
     }
     .container {
       width: 90%;
       max-width: 400px;
+      margin: 20px auto;
       padding: 20px;
       border-radius: 8px;
       background-color: #ffffff;
@@ -455,6 +456,7 @@ const char chunk1[] PROGMEM = R"(<!DOCTYPE html>
       margin: 8px 0;
       border: 1px solid #ddd;
       border-radius: 4px;
+      box-sizing: border-box;
     }
     button {
       width: 100%;
@@ -602,6 +604,22 @@ const char chunk4[] PROGMEM = R"rawliteral(
         console.error('Error fetching status:', error);
       });
   }
+    function fetchConfig() {
+    fetch('http://192.168.4.1/configs')
+      .then(response => response.json())
+      .then(data => {
+
+        document.getElementById('mqtt-user').value = data.MqttClient;
+        document.getElementById('mqtt-topic').value = data.MqttClient;
+        document.getElementById('mqtt-fulltopic').value = data.MqttClient;
+
+       
+      })
+      .catch(error => {
+        console.error('Error fetching status:', error);
+      });
+  }
+  fetchConfig()
 
   setInterval(fetchStatus, 5000); 
 </script>
