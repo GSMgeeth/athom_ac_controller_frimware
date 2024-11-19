@@ -1,14 +1,11 @@
 #include <cstdlib>
 #include <stdbool.h>
 #include <string.h>
-// #include <vector>
 #include <sstream>
 #include <cstring>
-// #include <iostream>
 #include <cctype>
 #include <time.h>
 #include <ArduinoJson.h>
-// #include <RapidJSON.h>
 #include <ArduinoOTA.h>
 #include <EEPROM.h>
 
@@ -17,8 +14,6 @@
 #include <PubSubClient.h>
 #include <WiFiClientSecure.h>
 #include <base64.h>
-// #include <bearssl/bearssl.h>
-// #include <bearssl/bearssl_hmac.h>
 #include <libb64/cdecode.h>
 
 // Azure IoT SDK for C includes
@@ -61,11 +56,7 @@ const uint16_t kMinUnknownSize = 12;
 const uint8_t kTolerancePercentage = kTolerance; // kTolerance is normally 25%
 #define LEGACY_TIMING_INFO false
 
-// const uint16_t led = 13;
-
-// const char* ssid = "chathushka";
-// const char* password = "87654321";
-// const char *ssid = "AC_Controller";
+ 
 String hostnameBase = "ATH-IR-CUS";
 String hostname = "";
 String hipen = "-";
@@ -83,7 +74,6 @@ ESP8266WebServer server(80);
 ESP8266WebServer serverOTA(80);
 unsigned long lastSerialReadTime = 0;
 IRrecv irrecv(kRecvPin, kCaptureBufferSize, kTimeout, true);
-// IRrecv irrecv(kRecvPin);
 
 decode_results results; // Somewhere to store the results
 bool is_protocol_set = false;
@@ -1115,26 +1105,6 @@ void loadDataFromEEPROM()
   EEPROM.end();
 }
 
-// static void connectToWiFi()
-// {
-//   Serial.begin(115200);
-//   Serial.println();
-//   Serial.print("Connecting to WIFI SSID ");
-//   Serial.println(ssid);
-
-//   WiFi.mode(WIFI_STA);
-//   WiFi.disconnect();
-//   delay(100);
-//   WiFi.begin(ssid, password);
-//   while (WiFi.status() != WL_CONNECTED)
-//   {
-//     delay(500);
-//     Serial.print(".");
-//   }
-
-//   Serial.print("WiFi connected, IP address: ");
-//   Serial.println(WiFi.localIP());
-// }
 
 void setOTA()
 {
@@ -1427,11 +1397,6 @@ void receivedCallback(char *topic, byte *payload, unsigned int length)
 
         if (POWER == 1)
         {
-          // char buffer[20];
-          // readStringFromEEPROM(prot_address, buffer);
-          // PROTOCOL = buffer;
-          // Serial.print("Saved protocol: ");
-          // Serial.println(buffer);
           loadDataFromEEPROM();
           Serial.print("Saved protocol: ");
           Serial.println(PROTOCOL);
@@ -1505,92 +1470,10 @@ void receivedCallback(char *topic, byte *payload, unsigned int length)
   if (method == "protocol")
   {
     PROTOCOL = doc["protocol"];
-    // const char *protocol = doc["protocol"];
-    //  if (strcmp(protocol, "LG2") == 0)
-    //  {
-    //    PROTOCOL = 1;
-    //  }
-    //  else if (strcmp(protocol, "KELON") == 0)
-    //  {
-    //    PROTOCOL = 2;
-    //  }
-    //  else if (strcmp(protocol, "COOLIX") == 0)
-    //  {
-    //    PROTOCOL = 3;
-    //  }
-    //  else if (strcmp(protocol, "SONY") == 0)
-    //  {
-    //    PROTOCOL = 4;
-    //  }
-    //  else if (strcmp(protocol, "DAIKIN") == 0)
-    //  {
-    //    PROTOCOL = 5;
-    //  }
-    //  else if (strcmp(protocol, "HAIER_AC") == 0)
-    //  {
-    //    PROTOCOL = 6;
-    //  }
-    //  else if (strcmp(protocol, "WHIRLPOOL_AC") == 0)
-    //  {
-    //    PROTOCOL = 7;
-    //  }
-    //  else if (strcmp(protocol, "TEKNOPOINT") == 0)
-    //  {
-    //    PROTOCOL = 8;
-    //  }
-    //  else if (strcmp(protocol, "GREE") == 0)
-    //  {
-    //    PROTOCOL = 9;
-    //  }
-    //  else if (strcmp(protocol, "TCL112AC") == 0)
-    //  {
-    //    PROTOCOL = 10;
-    //  }
-    //  else if (strcmp(protocol, "TCL96AC") == 0)
-    //  {
-    //    PROTOCOL = 11;
-    //  }
-    //  else if (strcmp(protocol, "SAMSUNG") == 0)
-    //  {
-    //    PROTOCOL = 12;
-    //  }
-    //  else if (strcmp(protocol, "PRONTO") == 0)
-    //  {
-    //    PROTOCOL = 13;
-    //  }
-    //  else if (strcmp(protocol, "PIONEER") == 0)
-    //  {
-    //    PROTOCOL = 14;
-    //  }
-
     // writeStringToEEPROM(prot_address, PROTOCOL);
     saveProtocol();
   }
 
-  //   else if(method == "raw"){
-
-  //   ir_msg msg;
-
-  //   const char* PROTOCOL  = doc["protocol"]; // "LG2"
-  //  // String protocol = String(PROTOCOL);
-  //   POWER = doc["state"]; // 1
-  //   TEMPERATURE = doc["temp"]; // 22
-  //   FAN_SPEED = doc["fanSpeed"]; // 0
-  //   MODE= doc["mode"]; //1
-
-  //  // set msg
-  //   msg.protocol    = PROTOCOL;
-  //   msg.power       = POWER;
-  //   msg.fan_speed   = FAN_SPEED;
-  //   msg.mode        = MODE;
-  //   msg.temp        = TEMPERATURE;
-  //  //sending ir command
-  //   send_ir(msg, ir_led);
-  //   //Serial.println("ir command sent");
-
-  //   }
-
-  ///////////////////
   String response_topic = "$iothub/methods/res/200/?$rid=" + req_id;
   String response_payload = "success";
   Serial.print("response topic");
@@ -1809,17 +1692,6 @@ static void establishConnection()
     startServer();
     isWifiConnected = connectToWiFi();
 
-    // delay(5000);
-    //  if (!isWifiConnected)
-    //  {
-    //    Serial.print("isWifiConnected = ");
-    //    Serial.println(isWifiConnected);
-    //    delay(30000);
-    //    ESP.restart();
-    //  }
-    //  else
-    //  {
-    //  connectToWiFi();
     if (isWifiConnected)
     {
       setOTA();
@@ -1848,17 +1720,6 @@ static void establishConnection()
   }
 }
 
-// static char* getTelemetryPayload()
-// {
-//   az_span temp_span = az_span_create(telemetry_payload, sizeof(telemetry_payload));
-//   temp_span = az_span_copy(temp_span, AZ_SPAN_FROM_STR("{ \"msgCount\": "));
-//   (void)az_span_u32toa(temp_span, telemetry_send_count++, &temp_span);
-//   temp_span = az_span_copy(temp_span, AZ_SPAN_FROM_STR(" }"));
-//   temp_span = az_span_copy_u8(temp_span, '\0');
-
-//   return (char*)telemetry_payload;
-// }
-
 void setup()
 {
   Serial.begin(115200, SERIAL_8N1, SERIAL_TX_ONLY);
@@ -1881,18 +1742,6 @@ void setup()
 
 void loop()
 {
-  // ir_msg msg;
-  // // TEMPERATURE = doc["temp"];
-  // msg.protocol = PROTOCOL;
-  // msg.power = 1;
-  // msg.fan_speed = FAN_SPEED;
-  // msg.mode = MODE;
-  // msg.temp = TEMPERATURE;
-  // // sending ir command
-  // send_ir(msg, ir_led);
-  // delay(1000);
-  // // Serial.println("ir command sent");
-
   if (apStarted)
   {
     recieveProtocol();
@@ -1950,14 +1799,7 @@ void loop()
     establishConnection();
     delay(500);
   }
-  // int attempts = 0;
-  //  while (WiFi.status() != WL_CONNECTED && attempts < 10)
-  //  {
-  //    delay(1000);
-  //    Serial.print(".");
-  //    attempts++;
-  //  }
-
+ 
   else
   {
     ArduinoOTA.handle();
@@ -1966,19 +1808,4 @@ void loop()
     delay(500);
   }
 
-  // if (buttonPressed)
-  // {
-  //   unsigned long currentPressTime = millis();
-
-  //   // Check if button has been held down for long press interval
-  //   if (currentPressTime - pressStartTime >= longPressInterval)
-  //   {
-  //     Serial.println("Long press detected. Formatting LittleFS and resetting...");
-  //     LittleFS.format();
-  //     ESP.restart();
-  //   }
-
-  //   // Reset the flag after handling
-  //   buttonPressed = false;
-  // }
 }
