@@ -549,7 +549,7 @@ const char chunk3[] PROGMEM = R"rawliteral(
     const ssid = document.getElementById('ssid').value;
     const wifiPassword = document.getElementById('wifi-password').value;
     const protocol = document.getElementById('protocol').value;
-    const url = `/cm?user=admin&cmnd=${encodeURIComponent(`Backlog MqttHost ${mqttHost}; MqttUser ${mqttUser}; MqttClient ${mqttUser}; MqttPassword ${mqttPassword}; Topic ${mqttTopic}; FullTopic ${mqttFullTopic}; SSID1 ${ssid}; Password1 ${wifiPassword}; Protocol ${protocol};`)}`
+    const url = `http://192.168.4.1/cm?user=admin&cmnd=${encodeURIComponent(`Backlog MqttHost ${mqttHost}; MqttUser ${mqttUser}; MqttClient ${mqttUser}; MqttPassword ${mqttPassword}; Topic ${mqttTopic}; FullTopic ${mqttFullTopic}; SSID1 ${ssid}; Password1 ${wifiPassword}; Protocol ${protocol};`)}`
     fetch(url)
       .then(response => {
         if (response.ok) {
@@ -568,7 +568,7 @@ const char chunk3[] PROGMEM = R"rawliteral(
 const char chunk4[] PROGMEM = R"rawliteral(
   function sendTestCommand() {
     const protocol = document.getElementById('test-protocol').value;
-    const url = `/testIR?command=protocol%20${protocol}%3B%20power%201%3B%20temp%2021%3B%20fan_speed%202%3B`;
+    const url = `http://192.168.4.1/testIR?command=protocol%20${protocol}%3B%20power%201%3B%20temp%2021%3B%20fan_speed%202%3B`;
     fetch(url)
       .then(response => {
         if (response.ok) {
@@ -584,7 +584,7 @@ const char chunk4[] PROGMEM = R"rawliteral(
   }
 
   function fetchStatus() {
-    fetch('/status')
+    fetch('http://192.168.4.1/status')
       .then(response => response.json())
       .then(data => {
 
@@ -595,7 +595,7 @@ const char chunk4[] PROGMEM = R"rawliteral(
       });
   }
     function fetchConfig() {
-    fetch('/configs')
+    fetch('http://192.168.4.1/configs')
       .then(response => response.json())
       .then(data => {
 
