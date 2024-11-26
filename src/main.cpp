@@ -1689,7 +1689,7 @@ static void establishConnection()
     {
       WiFi.mode(WIFI_STA);
     }
-    startServer();
+    //startServer();
     isWifiConnected = connectToWiFi();
 
     if (isWifiConnected)
