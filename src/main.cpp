@@ -305,82 +305,82 @@ void updateFirmware(String url)
   }
 }
 
-void handleGetFirmwareURL()
-{
-  // String firmwareUrl = "http://your-firmware-server.com/firmware.bin";
-  String URL = serverOTA.arg("OtaUrl");
-  int semicolonPos = URL.indexOf(";");
+// void handleGetFirmwareURL()
+// {
+//   // String firmwareUrl = "http://your-firmware-server.com/firmware.bin";
+//   String URL = serverOTA.arg("OtaUrl");
+//   int semicolonPos = URL.indexOf(";");
 
-  // Extract the URL substring
-  String firmwareURL = URL.substring(8, semicolonPos);
-  // const char*  = firmwareURL.c_str();
-  //   char charMinimalURL[firmwareURL.length() + 1]; // +1 for null terminator
-  //   firmwareURL.toCharArray(charMinimalURL, firmwareURL.length() + 1);
+//   // Extract the URL substring
+//   String firmwareURL = URL.substring(8, semicolonPos);
+//   // const char*  = firmwareURL.c_str();
+//   //   char charMinimalURL[firmwareURL.length() + 1]; // +1 for null terminator
+//   //   firmwareURL.toCharArray(charMinimalURL, firmwareURL.length() + 1);
 
-  //   Serial.print("Recieved firmware URL: ");
-  //   Serial.println(firmwareURL);
-  updateStarted = "true";
-  //  // char charMinimalURL[] = "http://ota.tasmota.com/tasmota/tasmota.bin.gz";
-  //   const char searchString[] = ".bin.gz";
-  //   const char replaceString[] = "-minimal.bin.gz";
+//   //   Serial.print("Recieved firmware URL: ");
+//   //   Serial.println(firmwareURL);
+//   updateStarted = "true";
+//   //  // char charMinimalURL[] = "http://ota.tasmota.com/tasmota/tasmota.bin.gz";
+//   //   const char searchString[] = ".bin.gz";
+//   //   const char replaceString[] = "-minimal.bin.gz";
 
-  //   // Find the position of the substring to replace
-  //   char* pos = strstr(charMinimalURL, searchString);
-  //   if (pos != NULL) {
-  //       // Calculate the length of the replacement string
-  //       size_t replaceLen = strlen(replaceString);
-  //       size_t searchLen = strlen(searchString);
-  //       size_t originalLen = strlen(charMinimalURL);
+//   //   // Find the position of the substring to replace
+//   //   char* pos = strstr(charMinimalURL, searchString);
+//   //   if (pos != NULL) {
+//   //       // Calculate the length of the replacement string
+//   //       size_t replaceLen = strlen(replaceString);
+//   //       size_t searchLen = strlen(searchString);
+//   //       size_t originalLen = strlen(charMinimalURL);
 
-  //       // Calculate the length difference
-  //       int lengthDiff = replaceLen - searchLen;
+//   //       // Calculate the length difference
+//   //       int lengthDiff = replaceLen - searchLen;
 
-  //       // Shift the remaining characters to accommodate the new string
-  //       memmove(pos + replaceLen, pos + searchLen, originalLen - (pos - charMinimalURL) - searchLen + 1);
+//   //       // Shift the remaining characters to accommodate the new string
+//   //       memmove(pos + replaceLen, pos + searchLen, originalLen - (pos - charMinimalURL) - searchLen + 1);
 
-  //       // Copy the replacement string into the position
-  //       memcpy(pos, replaceString, replaceLen);
+//   //       // Copy the replacement string into the position
+//   //       memcpy(pos, replaceString, replaceLen);
 
-  //         // memmove(pos + replaceLen, pos + searchLen, originalLen - (pos - charMinimalURL) - searchLen + 1);
+//   //         // memmove(pos + replaceLen, pos + searchLen, originalLen - (pos - charMinimalURL) - searchLen + 1);
 
-  //         // // Copy the replacement string into the position
-  //         // memcpy(pos, replaceString, replaceLen);
+//   //         // // Copy the replacement string into the position
+//   //         // memcpy(pos, replaceString, replaceLen);
 
-  // Your original string
-  // String firmwareURL = "example_file.bin.gz";
-  // Substring to be replaced
-  String searchString = ".bin.gz";
-  // Replacement substring
-  String replaceString = "-minimal.bin.gz";
+//   // Your original string
+//   // String firmwareURL = "example_file.bin.gz";
+//   // Substring to be replaced
+//   String searchString = ".bin.gz";
+//   // Replacement substring
+//   String replaceString = "-minimal.bin.gz";
 
-  // Find the position of the substring to be replaced
-  int pos = firmwareURL.indexOf(searchString);
+//   // Find the position of the substring to be replaced
+//   int pos = firmwareURL.indexOf(searchString);
 
-  // If the substring is found
-  if (pos != -1)
-  {
-    // Maximum length of the modified string
-    const int bufferSize = firmwareURL.length() + (replaceString.length() - searchString.length()) + 1;
-    // Buffer to hold the modified string
-    char charMinimalURL[bufferSize + 10];
+//   // If the substring is found
+//   if (pos != -1)
+//   {
+//     // Maximum length of the modified string
+//     const int bufferSize = firmwareURL.length() + (replaceString.length() - searchString.length()) + 1;
+//     // Buffer to hold the modified string
+//     char charMinimalURL[bufferSize + 10];
 
-    // Copy characters before the substring
-    firmwareURL.substring(0, pos).toCharArray(charMinimalURL, bufferSize);
-    // Concatenate the replacement substring
-    strcat(charMinimalURL, replaceString.c_str());
-    // Concatenate characters after the substring
-    strcat(charMinimalURL, firmwareURL.substring(pos + searchString.length()).c_str());
+//     // Copy characters before the substring
+//     firmwareURL.substring(0, pos).toCharArray(charMinimalURL, bufferSize);
+//     // Concatenate the replacement substring
+//     strcat(charMinimalURL, replaceString.c_str());
+//     // Concatenate characters after the substring
+//     strcat(charMinimalURL, firmwareURL.substring(pos + searchString.length()).c_str());
 
-    // String minimalURL = String(charMinimalURL);
-    Serial.println(charMinimalURL);
-    String minimalURL(charMinimalURL);
-    Serial.println("Minimal firmware url = " + minimalURL);
-    saveURL(firmwareURL, updateStarted);
-    serverOTA.send(200, "text/plain", "OTA firmware recieved");
-    updateFirmware(minimalURL);
-  }
-  Serial.println("invalid URL");
-}
+//     // String minimalURL = String(charMinimalURL);
+//     Serial.println(charMinimalURL);
+//     String minimalURL(charMinimalURL);
+//     Serial.println("Minimal firmware url = " + minimalURL);
+//     saveURL(firmwareURL, updateStarted);
+//     serverOTA.send(200, "text/plain", "OTA firmware recieved");
+//     updateFirmware(minimalURL);
+//   }
+//   Serial.println("invalid URL");
+// }
 
 String NetworkUniqueId(void)
 {
@@ -689,11 +689,11 @@ void startServer()
   // WiFi.softAPdisconnect(true);
   // Serial.println("Access Point ended.");
 }
-void startServerOTA()
-{
-  serverOTA.on("/firmware_url", HTTP_GET, handleGetFirmwareURL);
-  serverOTA.begin();
-}
+// void startServerOTA()
+// {
+//   serverOTA.on("/firmware_url", HTTP_GET, handleGetFirmwareURL);
+//   serverOTA.begin();
+// }
 
 
 void handleConfigs()
