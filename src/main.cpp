@@ -71,7 +71,7 @@ bool isWifiConnected = false;
 String updateStarted = "false";
 String firmwareURL = "";
 ESP8266WebServer server(80);
-ESP8266WebServer serverOTA(80);
+//ESP8266WebServer serverOTA(80);
 unsigned long lastSerialReadTime = 0;
 IRrecv irrecv(kRecvPin, kCaptureBufferSize, kTimeout, true);
 
@@ -1695,7 +1695,7 @@ static void establishConnection()
     if (isWifiConnected)
     {
       setOTA();
-      startServerOTA();
+      //startServerOTA();
       initializeTime();
       printCurrentTime();
       initializeClients();
@@ -1804,7 +1804,7 @@ void loop()
   {
     ArduinoOTA.handle();
     mqtt_client.loop();
-    serverOTA.handleClient();
+    //serverOTA.handleClient();     web server for ota updates is disabled
     delay(500);
   }
 
