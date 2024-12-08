@@ -699,7 +699,7 @@ void startServer()
 void handleConfigs()
 {
   Serial.println("Received request for /configs");
-  StaticJsonDocument<200> jsonDoc;
+  StaticJsonDocument<300> jsonDoc;
   jsonDoc["MqttHost"] = host;
   jsonDoc["MqttClient"] = hostname;
   jsonDoc["MqttPassword"] = device_key;
@@ -1677,6 +1677,9 @@ static void establishConnection()
   Serial.println("Launcing ac controller...");
   loadCredentials();
   loadMqqtParams();
+  loadDataFromEEPROM();
+  Serial.print("Saved protocol: ");
+  Serial.println(PROTOCOL);
   if (wifiSsid == "") /////////////////////////change for testing purposes////////////////// original =  if (wifiSsid == "")//////////////////////////
   {
     startAPServer();
@@ -1701,9 +1704,6 @@ static void establishConnection()
       initializeTime();
       printCurrentTime();
       initializeClients();
-      loadDataFromEEPROM();
-      Serial.print("Saved protocol: ");
-      Serial.println(PROTOCOL);
       // The SAS token is valid for 1 hour by default in this sample.
       // After one hour the sample must be restarted, or the client won't be able
       // to connect/stay connected to the Azure IoT Hub.
