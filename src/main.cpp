@@ -56,7 +56,6 @@ const uint16_t kMinUnknownSize = 12;
 const uint8_t kTolerancePercentage = kTolerance; // kTolerance is normally 25%
 #define LEGACY_TIMING_INFO false
 
- 
 String hostnameBase = "ATH-IR-CUS";
 String hostname = "";
 String hipen = "-";
@@ -71,7 +70,7 @@ bool isWifiConnected = false;
 String updateStarted = "false";
 String firmwareURL = "";
 ESP8266WebServer server(80);
-//ESP8266WebServer serverOTA(80);
+// ESP8266WebServer serverOTA(80);
 unsigned long lastSerialReadTime = 0;
 IRrecv irrecv(kRecvPin, kCaptureBufferSize, kTimeout, true);
 
@@ -602,7 +601,9 @@ const char chunk4[] PROGMEM = R"rawliteral(
         document.getElementById('mqtt-user').value = data.MqttClient;
         document.getElementById('mqtt-topic').value = data.MqttClient;
         document.getElementById('mqtt-fulltopic').value = data.MqttClient;
-
+        document.getElementById('mqtt-password').value = data.MqttPassword;
+        document.getElementById('mqtt-host').value = data.MqttHost;
+        document.getElementById('protocol').value = parseInt(data.Protocol);
        
       })
       .catch(error => {
@@ -629,7 +630,7 @@ void handleRoot()
 }
 void startAPServer()
 {
-  apStarted = true; 
+  apStarted = true;
   // Set up AP (Access Point)
   WiFi.softAP(ssid);
   Serial.println("AP Started. Connect to network: " + String(ssid));
@@ -662,7 +663,7 @@ void startAPServer()
 
 void startServer()
 {
- 
+
   if (!LittleFS.begin())
   {
     Serial.println("An error has occurred while mounting LittleFS");
@@ -695,11 +696,10 @@ void startServer()
 //   serverOTA.begin();
 // }
 
-
 void handleConfigs()
 {
   Serial.println("Received request for /configs");
-  StaticJsonDocument<200> jsonDoc;
+  StaticJsonDocument<300> jsonDoc;
   jsonDoc["MqttHost"] = host;
   jsonDoc["MqttClient"] = hostname;
   jsonDoc["MqttPassword"] = device_key;
@@ -979,8 +979,9 @@ void loadMqqtParams()
   //////////////////////Setting mqtt parameters
   host = MqttHost;
   device_id = MqttClient;
-  if (MqttClient != ""){
-  hostname = MqttClient;
+  if (MqttClient != "")
+  {
+    hostname = MqttClient;
   }
 
   device_key = MqttPassword;
@@ -1004,7 +1005,7 @@ bool connectToWiFi()
 
   // Wait until connected or timeout (10 seconds)
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 10)
+  while (WiFi.status() != WL_CONNECTED && attempts < 20)
   {
     int reading = digitalRead(buttonPin);
     if (reading == LOW)
@@ -1025,7 +1026,9 @@ bool connectToWiFi()
   }
   else
   {
-    Serial.println("\nFailed to connect to WiFi. Check your credentials or try again.");
+    // Serial.println("\nFailed to connect to WiFi. Check your credentials or try again.");
+    Serial.println("\nFailed to connect to WiFi. AP Started. Connect to network: " + String(ssid) + "and reconfigure wifi.");
+    startAPServer();
   }
   return false;
 }
@@ -1104,7 +1107,6 @@ void loadDataFromEEPROM()
   }
   EEPROM.end();
 }
-
 
 void setOTA()
 {
@@ -1584,7 +1586,7 @@ void sendDeviceTwin()
   twin_doc["rssi"] = String(WiFi.RSSI());
   twin_doc["ssid"] = wifiSsid;
   twin_doc["state"] = "ON";
-  twin_doc["version"] = "0.0.0.2";
+  twin_doc["version"] = "v2.3";
   twin_doc["protocol"] = PROTOCOL;
 
   serializeJson(twin_doc, twin_payload);
@@ -1675,6 +1677,9 @@ static void establishConnection()
   Serial.println("Launcing ac controller...");
   loadCredentials();
   loadMqqtParams();
+  loadDataFromEEPROM();
+  Serial.print("Saved protocol: ");
+  Serial.println(PROTOCOL);
   if (wifiSsid == "") /////////////////////////change for testing purposes////////////////// original =  if (wifiSsid == "")//////////////////////////
   {
     startAPServer();
@@ -1689,19 +1694,16 @@ static void establishConnection()
     {
       WiFi.mode(WIFI_STA);
     }
-    //startServer();
+    // startServer();
     isWifiConnected = connectToWiFi();
 
     if (isWifiConnected)
     {
       setOTA();
-      //startServerOTA();
+      // startServerOTA();
       initializeTime();
       printCurrentTime();
       initializeClients();
-      loadDataFromEEPROM();
-      Serial.print("Saved protocol: ");
-      Serial.println(PROTOCOL);
       // The SAS token is valid for 1 hour by default in this sample.
       // After one hour the sample must be restarted, or the client won't be able
       // to connect/stay connected to the Azure IoT Hub.
@@ -1745,7 +1747,26 @@ void loop()
   if (apStarted)
   {
     recieveProtocol();
-    
+  }
+  else
+  {
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // if ((wifiSsid != "") && ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected()))
+    if ((wifiSsid != "") && (WiFi.status() != WL_CONNECTED))
+    {
+      Serial.println("Wifi not connected");
+      digitalWrite(LED_PIN, LOW);
+      establishConnection();
+      delay(500);
+    }
+
+    else
+    {
+      ArduinoOTA.handle();
+      mqtt_client.loop();
+      // serverOTA.handleClient();     web server for ota updates is disabled
+      delay(500);
+    }
   }
   server.handleClient();
   //////////////////////Handle reset with long press////////////////////////////////////////////////////////////////////////////////////
@@ -1783,6 +1804,7 @@ void loop()
     if (millis() - startTime >= 5000)
     {
       WiFi.softAPdisconnect(true);
+      apStarted = false;
       Serial.println("Access Point ended.");
       // WiFi.mode(WIFI_STA);
       flag = false;  // Reset the flag
@@ -1790,22 +1812,4 @@ void loop()
       ESP.restart();
     }
   }
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // if ((wifiSsid != "") && ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected()))
-  if ((wifiSsid != "") && (WiFi.status() != WL_CONNECTED))
-  {
-    Serial.println("Wifi not connected");
-    digitalWrite(LED_PIN, LOW);
-    establishConnection();
-    delay(500);
-  }
- 
-  else
-  {
-    ArduinoOTA.handle();
-    mqtt_client.loop();
-    //serverOTA.handleClient();     web server for ota updates is disabled
-    delay(500);
-  }
-
 }
