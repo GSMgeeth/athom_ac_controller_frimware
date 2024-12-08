@@ -603,7 +603,7 @@ const char chunk4[] PROGMEM = R"rawliteral(
         document.getElementById('mqtt-fulltopic').value = data.MqttClient;
         document.getElementById('mqtt-password').value = data.MqttPassword;
         document.getElementById('mqtt-host').value = data.MqttHost;
-        document.getElementById('protocol').value = data.Protocol;
+        document.getElementById('protocol').value = parseInt(data.Protocol);
        
       })
       .catch(error => {
