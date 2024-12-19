@@ -1029,8 +1029,8 @@ bool connectToWiFi()
     // Serial.println("\nFailed to connect to WiFi. Check your credentials or try again.");
     Serial.println("\nFailed to connect to WiFi. AP Started. Connect to network: " + String(ssid) + "and reconfigure wifi.");
     startAPServer();
+    return false;
   }
-  return false;
 }
 
 // Function to read a string from EEPROM
@@ -1695,9 +1695,13 @@ static void establishConnection()
       WiFi.mode(WIFI_STA);
     }
     // startServer();
-    isWifiConnected = connectToWiFi();
 
-    if (isWifiConnected)
+    if (!WiFi.isConnected())
+    {
+      isWifiConnected = connectToWiFi();
+    }
+
+    if (WiFi.isConnected())
     {
       setOTA();
       // startServerOTA();
@@ -1751,8 +1755,8 @@ void loop()
   else
   {
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    // if ((wifiSsid != "") && ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected()))
-    if ((wifiSsid != "") && (WiFi.status() != WL_CONNECTED))
+    // if ((wifiSsid != "") && (WiFi.status() != WL_CONNECTED))
+    if ((wifiSsid != "") && ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected()))
     {
       Serial.println("Wifi not connected");
       digitalWrite(LED_PIN, LOW);
