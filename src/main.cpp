@@ -153,7 +153,7 @@ void saveURL(String URL, String updateStarted);
 String NetworkUniqueId(void);
 uint32_t ESP_getChipId(void);
 void handleGetFirmwareURL();
-void updateFirmware(String url);
+// void updateFirmware(String url);
 void setOTA();
 void recieveProtocol();
 void recieveProtocolWithTimer();
@@ -263,46 +263,46 @@ void recieveProtocol()
   }
 }
 
-void updateFirmware(String url)
-{
-  HTTPClient http;
+// void updateFirmware(String url)
+// {
+//   HTTPClient http;
 
-  Serial.print("[HTTP] begin...\n");
-  if (http.begin(url))
-  {
-    Serial.print("[HTTP] GET...\n");
-    int httpCode = http.GET();
-    if (httpCode == HTTP_CODE_OK)
-    {
-      Serial.println("[HTTP] Firmware update available.");
-      WiFiUDP::stopAll(); // Ensure no other services are using port 8266
+//   Serial.print("[HTTP] begin...\n");
+//   if (http.begin(url))
+//   {
+//     Serial.print("[HTTP] GET...\n");
+//     int httpCode = http.GET();
+//     if (httpCode == HTTP_CODE_OK)
+//     {
+//       Serial.println("[HTTP] Firmware update available.");
+//       WiFiUDP::stopAll(); // Ensure no other services are using port 8266
 
-      Serial.print("Updating firmware from: ");
-      Serial.println(url);
+//       Serial.print("Updating firmware from: ");
+//       Serial.println(url);
 
-      t_httpUpdate_return ret = ESPhttpUpdate.update(url);
-      switch (ret)
-      {
-      case HTTP_UPDATE_FAILED:
-        Serial.printf("[OTA] Update failed (%d): %s\n", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
-        break;
-      case HTTP_UPDATE_NO_UPDATES:
-        Serial.println("[OTA] No updates available.");
-        break;
-      case HTTP_UPDATE_OK:
-        Serial.println("[OTA] Update successful.");
-        delay(2000);
-        ESP.restart();
-        break;
-      }
-      http.end();
-    }
-    else
-    {
-      Serial.printf("[HTTP] Unable to connect\n");
-    }
-  }
-}
+//       // t_httpUpdate_return ret = ESPhttpUpdate.update(url);
+//       // switch (ret)
+//       // {
+//       // case HTTP_UPDATE_FAILED:
+//       //   Serial.printf("[OTA] Update failed (%d): %s\n", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+//       //   break;
+//       // case HTTP_UPDATE_NO_UPDATES:
+//       //   Serial.println("[OTA] No updates available.");
+//       //   break;
+//       // case HTTP_UPDATE_OK:
+//       //   Serial.println("[OTA] Update successful.");
+//       //   delay(2000);
+//       //   ESP.restart();
+//       //   break;
+//       // }
+//       http.end();
+//     }
+//     else
+//     {
+//       Serial.printf("[HTTP] Unable to connect\n");
+//     }
+//   }
+// }
 
 // void handleGetFirmwareURL()
 // {
@@ -1251,7 +1251,7 @@ void receivedCallback(char *topic, byte *payload, unsigned int length)
           Serial.println("Minimal firmware url = " + minimalURL);
           updateStarted = "true";
           saveURL(firmwareURL, updateStarted);
-          updateFirmware(minimalURL);
+          // updateFirmware(minimalURL);
         }
       }
     }
