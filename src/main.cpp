@@ -1586,7 +1586,7 @@ void sendDeviceTwin()
   twin_doc["rssi"] = String(WiFi.RSSI());
   twin_doc["ssid"] = wifiSsid;
   twin_doc["state"] = "ON";
-  twin_doc["version"] = "v2.3";
+  twin_doc["version"] = "v2.4";
   twin_doc["protocol"] = PROTOCOL;
 
   serializeJson(twin_doc, twin_payload);
