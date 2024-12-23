@@ -1024,13 +1024,15 @@ bool connectToWiFi()
     Serial.println("IP address: " + WiFi.localIP().toString());
     return true;
   }
-  else
+  else if (!apStarted)
   {
     // Serial.println("\nFailed to connect to WiFi. Check your credentials or try again.");
-    Serial.println("\nFailed to connect to WiFi. AP Started. Connect to network: " + String(ssid) + "and reconfigure wifi.");
+    Serial.println("\nFailed to connect to WiFi. AP Started. Connect to network: " + String(ssid) + " and reconfigure wifi.");
     startAPServer();
     return false;
   }
+  
+  return false;
 }
 
 // Function to read a string from EEPROM
@@ -1758,7 +1760,7 @@ void loop()
     // if ((wifiSsid != "") && (WiFi.status() != WL_CONNECTED))
     if ((wifiSsid != "") && ((WiFi.status() != WL_CONNECTED) || !mqtt_client.connected()))
     {
-      Serial.println("Wifi not connected");
+      Serial.println("WiFi or MQTT not connected");
       digitalWrite(LED_PIN, LOW);
       establishConnection();
       delay(500);
@@ -1813,6 +1815,20 @@ void loop()
       // WiFi.mode(WIFI_STA);
       flag = false;  // Reset the flag
       startTime = 0; // Reset startTime for the next time flag is true
+      ESP.restart();
+    }
+  }
+
+  if (apStarted && (millis() - startTime) >= 60000 && (millis() - startTime) % 60000 == 0)
+  {
+    if (wifiSsid != "" && WiFi.status() != WL_CONNECTED)
+    {
+      isWifiConnected = connectToWiFi();
+    }
+
+    if (WiFi.isConnected())
+    {
+      Serial.println("\nConnected to WiFi. Restarting device...");
       ESP.restart();
     }
   }
